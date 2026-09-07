@@ -1,0 +1,139 @@
+"""Group actors into behavioural clusters.
+
+Clusters are a descriptive aid, not a claim: "these groups are documented as
+behaving alike". Agglomerative clustering on the cosine *distance* matrix is
+the default because it needs no assumption about cluster shape and can be cut
+at a distance threshold rather than a guessed ``k``.
+
+Owner: engine module. Output feeds the heatmap ordering and the cluster labels
+shown next to query candidates.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
+from .. import config
+from ..schema import ActorId, SimilarityMatrix
+
+
+def to_distance_matrix(similarity: SimilarityMatrix) -> np.ndarray:
+    """Convert similarity to a distance matrix suitable for sklearn/scipy.
+
+    Args:
+        similarity: Actor similarity matrix in ``[0, 1]``.
+
+    Returns:
+        ``1 - similarity``, clipped to ``[0, 1]``, with an exact zero diagonal
+        (scipy rejects a condensed matrix whose diagonal is not zero).
+    """
+    # TODO(engine): np.clip(1.0 - similarity.matrix, 0.0, 1.0);
+    #   np.fill_diagonal(distance, 0.0); symmetrise with (d + d.T) / 2.
+    raise NotImplementedError("to_distance_matrix")
+
+
+def cluster_actors(
+    similarity: SimilarityMatrix,
+    *,
+    method: str = config.CLUSTERING_METHOD,
+    n_clusters: int | None = config.CLUSTERING_N_CLUSTERS,
+    distance_threshold: float = config.CLUSTERING_DISTANCE_THRESHOLD,
+    linkage: str = config.CLUSTERING_LINKAGE,
+) -> dict[ActorId, int]:
+    """Assign each actor a cluster id.
+
+    Args:
+        similarity: Actor similarity matrix.
+        method: ``"agglomerative"``, ``"kmeans"`` or ``"dbscan"``.
+        n_clusters: Fixed cluster count; ``None`` uses ``distance_threshold``.
+        distance_threshold: Cosine-distance cut for agglomerative clustering.
+        linkage: Linkage criterion (``"average"`` by default -- ``"ward"`` is
+            not valid on a precomputed distance matrix).
+
+    Returns:
+        ``{actor_id: cluster_id}``. Clusters smaller than
+        :data:`ttp_similarity.config.MIN_CLUSTER_SIZE` are relabelled ``-1``.
+
+    Raises:
+        ValueError: On an unknown method, or if both ``n_clusters`` and
+            ``distance_threshold`` are ``None``.
+    """
+    # TODO(engine): AgglomerativeClustering(metric="precomputed",
+    #   linkage=linkage, n_clusters=n_clusters,
+    #   distance_threshold=None if n_clusters else distance_threshold)
+    #   fitted on to_distance_matrix(similarity).
+    # TODO(engine): KMeans works on vectors, not distances -- if method is
+    #   "kmeans", take the VectorSpace instead. Decide and note it in
+    #   DECISIONS.md before implementing.
+    # TODO(engine): apply the MIN_CLUSTER_SIZE relabelling last, and renumber
+    #   the surviving clusters from 0 so ids are stable and dense.
+    raise NotImplementedError("cluster_actors")
+
+
+def clusters_to_frame(
+    assignments: dict[ActorId, int], actor_names: dict[ActorId, str]
+) -> pd.DataFrame:
+    """Build the ``clusters.csv`` frame.
+
+    Args:
+        assignments: ``{actor_id: cluster_id}``.
+        actor_names: ``{actor_id: display name}``.
+
+    Returns:
+        DataFrame with :data:`~ttp_similarity.schema.CLUSTER_COLUMNS`, sorted by
+        cluster then actor name.
+    """
+    frame = pd.DataFrame(
+        [
+            {
+                "actor_id": actor_id,
+                "actor_name": actor_names.get(actor_id, actor_id),
+                "cluster_id": int(cluster_id),
+            }
+            for actor_id, cluster_id in assignments.items()
+        ]
+    )
+    return frame.sort_values(["cluster_id", "actor_name"]).reset_index(drop=True)
+
+
+def order_for_heatmap(
+    similarity: SimilarityMatrix, assignments: dict[ActorId, int] | None = None
+) -> list[int]:
+    """Row/column ordering that puts similar actors next to each other.
+
+    A heatmap in arbitrary order shows nothing; ordered by the clustering
+    dendrogram it shows blocks. Used by the app.
+
+    Args:
+        similarity: Actor similarity matrix.
+        assignments: Optional cluster assignment; when given, actors are grouped
+            by cluster and ordered within it.
+
+    Returns:
+        Row indices in display order.
+    """
+    # TODO(engine): scipy.cluster.hierarchy.linkage on the condensed distance
+    #   (scipy.spatial.distance.squareform) then leaves_list(optimal_leaf_ordering(...)).
+    raise NotImplementedError("order_for_heatmap")
+
+
+def cluster_profile(
+    assignments: dict[ActorId, int],
+    actor_technique: pd.DataFrame,
+    top_n: int = 10,
+) -> pd.DataFrame:
+    """Describe each cluster by the techniques that define it.
+
+    Args:
+        assignments: ``{actor_id: cluster_id}``.
+        actor_technique: The ``actor_technique.csv`` edge table.
+        top_n: Techniques listed per cluster.
+
+    Returns:
+        DataFrame with ``cluster_id``, ``technique_id``, ``technique_name``,
+        ``share_in_cluster``, ``lift`` (in-cluster share / overall share).
+        Sorting by ``lift`` is what makes a cluster describable in words.
+    """
+    # TODO(engine): join assignments onto the edge table, group by cluster.
+    raise NotImplementedError("cluster_profile")

@@ -1,0 +1,42 @@
+# ttp-similarity-engine -- bagimliliklar
+#
+# Python 3.11.x GEREKLIDIR (bkz. .python-version, pyproject.toml, DECISIONS.md #10).
+#
+# Kurulum:
+#   Windows        py -3.11 -m venv .venv  &&  .venv\Scripts\Activate.ps1
+#   macOS / Linux  python3.11 -m venv .venv  &&  source .venv/bin/activate
+#   Ardindan       pip install -r requirements.txt
+#   Dogrulama      python check_setup.py
+#
+# Surumler bilerek "==" ile sabitlenmistir: uc kisi uc makinede birebir ayni
+# paket surumlerini kurmalidir. Bu surumler Python 3.11 icin cozulmustur
+# (numpy 2.5.x ve scipy 1.18.x'in 3.11 wheel'i YOKTUR -- 3.13'te kurulu olan
+# surumleri buraya kopyalamayin).
+#
+# Surumu yukseltirken:
+#   1) pyproject.toml'daki requires-python ile uyumlu oldugundan emin olun
+#   2) pip install --dry-run --python-version 3.11 --only-binary=:all: \
+#          --target <gecici-dizin> -r requirements.txt
+#      komutu ile 3.11 uyumlulugunu dogrulayin
+#   3) python check_setup.py && pytest
+
+# --- veri isleme ---
+pandas==2.3.3
+numpy==2.4.6
+
+# --- modelleme / benzerlik ---
+scikit-learn==1.9.0
+scipy==1.17.1
+
+# --- gorsellestirme ---
+matplotlib==3.11.1
+seaborn==0.13.2
+
+# --- arayuz ---
+streamlit==1.63.0
+
+# --- MITRE ATT&CK STIX indirme ---
+requests==2.34.2
+
+# --- gelistirme / test (bilerek tek dosyada: ayrica bir dev dosyasi yok) ---
+pytest==8.4.2

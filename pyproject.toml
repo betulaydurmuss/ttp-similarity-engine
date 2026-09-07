@@ -1,0 +1,15 @@
+# Minimal project metadata. No packaging/infra beyond what pytest needs:
+# the package lives at the repository root, so `python -m ttp_similarity...`
+# works from a clean checkout without an install step.
+[project]
+name = "ttp-similarity-engine"
+version = "0.1.0"
+description = "Behavioural similarity engine for MITRE ATT&CK threat-actor TTP sets."
+# Pinned to a single minor version, not ">=3.11": the point is that all three
+# developers run the SAME interpreter. Patch level is left free (3.11.x) --
+# patch releases are bug/security fixes only. See DECISIONS.md section 10.
+requires-python = ">=3.11,<3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
