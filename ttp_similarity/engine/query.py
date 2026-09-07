@@ -51,10 +51,17 @@ def normalize_query_input(raw: str | Sequence[str]) -> tuple[TechniqueId, ...]:
     Returns:
         Sorted unique parent-level technique ids (sub-techniques rolled up).
     """
-    # TODO(engine): re.split(r"[\s,;]+", ...) when given a string; then
-    #   normalize.normalize_technique_ids(). Keep entries that do not look like
-    #   technique ids so they can be reported as unknown.
-    raise NotImplementedError("normalize_query_input")
+    import re
+    from ..data.normalize import normalize_technique_ids
+
+    if isinstance(raw, str):
+        tokens = re.split(r"[\s,;]+", raw.strip())
+    else:
+        tokens = list(raw)
+    # Keep entries that don't look like technique ids so they can be reported
+    # as unknown -- normalize_technique_ids upper-cases and de-duplicates.
+    tokens = [t for t in tokens if t.strip()]
+    return normalize_technique_ids(tokens)
 
 
 def score_actors(query_vector: np.ndarray, space: VectorSpace) -> np.ndarray:
@@ -69,8 +76,8 @@ def score_actors(query_vector: np.ndarray, space: VectorSpace) -> np.ndarray:
     Returns:
         Shape ``(n_actors,)`` array of scores in ``[0, 1]``.
     """
-    # TODO(engine): space.matrix @ query_vector, clipped to [0, 1].
-    raise NotImplementedError("score_actors")
+    scores = space.matrix @ query_vector
+    return np.clip(scores, 0.0, 1.0)
 
 
 def explain_candidate(
@@ -93,11 +100,41 @@ def explain_candidate(
         the matched techniques ranked by their share of the score, capped at
         ``max_evidence``. Contributions across all matched techniques sum to 1.
     """
-    # TODO(engine): intersect the query with the actor's non-zero columns;
-    #   contribution(t) = weight(t) / sum(weight(matched)).
-    # TODO(engine): missing_ids is what makes the result auditable -- "this
-    #   actor matches 6 of your 9 techniques" is the sentence the UI needs.
-    raise NotImplementedError("explain_candidate")
+    space = artifacts.space
+    tech_idx = space.technique_index()
+    actor_row = space.matrix[actor_index]
+    query_set = set(query_technique_ids)
+
+    matched: list[TechniqueId] = []
+    missing: list[TechniqueId] = []
+    for tid in query_technique_ids:
+        j = tech_idx.get(tid)
+        if j is not None and actor_row[j] > 0:
+            matched.append(tid)
+        else:
+            missing.append(tid)
+
+    # Build evidence: how much each matched technique contributed
+    evidence: list[TechniqueContribution] = []
+    if matched:
+        matched_weights = {tid: artifacts.weights.get(tid, 0.0) for tid in matched}
+        total_weight = sum(matched_weights.values())
+        if total_weight <= 0:
+            total_weight = 1.0  # avoid division by zero
+
+        for tid in matched:
+            w = matched_weights[tid]
+            evidence.append(TechniqueContribution(
+                technique_id=tid,
+                technique_name=artifacts.technique_names.get(tid, tid),
+                weight=w,
+                contribution=w / total_weight,
+            ))
+        # Sort by contribution descending, cap at max_evidence
+        evidence.sort(key=lambda e: e.contribution, reverse=True)
+        evidence = evidence[:max_evidence]
+
+    return tuple(matched), tuple(missing), tuple(evidence)
 
 
 def rank_candidates(
@@ -117,11 +154,54 @@ def rank_candidates(
     Returns:
         Candidates ordered best first, each with its evidence filled in.
     """
-    # TODO(engine): vectorize_query -> score_actors -> np.argsort descending ->
-    #   build Candidate objects via explain_candidate().
-    # TODO(engine): ties -- break deterministically on actor_id so the
-    #   evaluation benchmark is reproducible.
-    raise NotImplementedError("rank_candidates")
+    from . import vectorize
+
+    query_vector, known_ids, unknown_ids = vectorize.vectorize_query(
+        query_technique_ids, artifacts.space, artifacts.weights,
+    )
+
+    # All-zero vector means nothing matched
+    if np.all(query_vector == 0):
+        return ()
+
+    scores = score_actors(query_vector, artifacts.space)
+
+    # Argsort descending; break ties deterministically on actor_id
+    order = sorted(
+        range(len(scores)),
+        key=lambda i: (-scores[i], artifacts.space.actor_ids[i]),
+    )
+
+    candidates: list[Candidate] = []
+    for rank_0, actor_idx in enumerate(order):
+        score = float(scores[actor_idx])
+        if score < min_score:
+            break
+        if len(candidates) >= top_k:
+            break
+
+        matched_ids, missing_ids, evidence = explain_candidate(
+            actor_idx, list(known_ids), artifacts,
+        )
+        actor_id = artifacts.space.actor_ids[actor_idx]
+        # Look up actor name
+        actor_name = actor_id
+        for a in artifacts.actors:
+            if a.actor_id == actor_id:
+                actor_name = a.name
+                break
+
+        candidates.append(Candidate(
+            rank=len(candidates) + 1,
+            actor_id=actor_id,
+            actor_name=actor_name,
+            score=score,
+            matched_technique_ids=matched_ids,
+            missing_technique_ids=missing_ids,
+            evidence=evidence,
+        ))
+
+    return tuple(candidates)
 
 
 def query_techniques(
@@ -151,12 +231,49 @@ def query_techniques(
         ttp_similarity.storage.ArtifactMissingError: If the engine has not been
             built for ``dataset``.
     """
-    # TODO(engine): normalize_query_input -> vectorize_query (known/unknown
-    #   split) -> rank_candidates -> confidence.score_confidence -> assemble.
-    # TODO(engine): an empty known set must return an empty candidate tuple with
-    #   LOW confidence, not raise -- the UI shows "sorgu bos" rather than a
-    #   traceback.
-    raise NotImplementedError("query_techniques")
+    from . import confidence as confidence_mod, loading, vectorize
+
+    # Normalise input
+    technique_ids_clean = normalize_query_input(technique_ids)
+
+    # Load engine artifacts if not provided
+    if artifacts is None:
+        artifacts = loading.load_engine(dataset, with_similarity=False)
+
+    # Split into known / unknown
+    tech_idx = artifacts.space.technique_index()
+    known_ids = tuple(tid for tid in technique_ids_clean if tid in tech_idx)
+    unknown_ids = tuple(tid for tid in technique_ids_clean if tid not in tech_idx)
+
+    # An empty known set -> empty result with LOW confidence
+    from ..schema import ConfidenceBreakdown
+    if not known_ids:
+        return QueryResult(
+            query_technique_ids=technique_ids_clean,
+            unknown_technique_ids=unknown_ids,
+            candidates=(),
+            confidence=ConfidenceBreakdown(
+                rarity=0.0, margin=0.0, sufficiency=0.0,
+                score=0.0, level=config.ConfidenceLevel.LOW if hasattr(config, 'ConfidenceLevel') else __import__('ttp_similarity.schema', fromlist=['ConfidenceLevel']).ConfidenceLevel.LOW,
+            ),
+            dataset=artifacts.dataset,
+            disclaimer=config.DISCLAIMER,
+        )
+
+    # Rank candidates
+    candidates = rank_candidates(known_ids, artifacts, top_k=top_k)
+
+    # Compute confidence
+    conf = confidence_mod.score_confidence(candidates, known_ids, artifacts.weights)
+
+    return QueryResult(
+        query_technique_ids=technique_ids_clean,
+        unknown_technique_ids=unknown_ids,
+        candidates=candidates,
+        confidence=conf,
+        dataset=artifacts.dataset,
+        disclaimer=config.DISCLAIMER,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -8,23 +8,27 @@ MITRE ATT&CK Enterprise verisini kullanarak tehdit aktörlerinin davranışsal p
 
 ## Durum
 
-Bu depo şu anda **iskelet** aşamasındadır. Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır; algoritmik gövdeler `TODO` olarak işaretlidir.
-
-Şu an itibarıyla **çalışan** kısımlar (ekibin paralel geliştirme yapabilmesi için bilinçli olarak tamamlandı):
+Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır. **Analiz motoru (`engine/`) tamamen implement edilmiştir** — IDF ağırlıklandırma, vektörize etme, cosine similarity, kümeleme, güven skoru ve sorgu modu çalışır durumdadır.
 
 | Bileşen | Dosya | Durum |
 |---|---|---|
-| Ortak veri modeli | `ttp_similarity/schema.py` | Tamam |
-| Dosya yolları / workspace | `ttp_similarity/paths.py` | Tamam |
-| Ayarlar ve eşikler | `ttp_similarity/config.py` | Tamam |
-| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` | Tamam |
-| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` | Tamam |
-| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` | Tamam |
-| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` | Tamam |
-| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | Tamam |
+| Ortak veri modeli | `ttp_similarity/schema.py` | ✅ Tamam |
+| Dosya yolları / workspace | `ttp_similarity/paths.py` | ✅ Tamam |
+| Ayarlar ve eşikler | `ttp_similarity/config.py` | ✅ Tamam |
+| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` | ✅ Tamam |
+| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` | ✅ Tamam |
+| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` | ✅ Tamam |
+| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` | ✅ Tamam |
+| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` | ✅ Tamam |
+| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` | ✅ Tamam |
+| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` | ✅ Tamam |
+| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` | ✅ Tamam |
+| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` | ✅ Tamam |
+| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` | ✅ Tamam |
+| Motor build pipeline | `ttp_similarity/engine/build.py` | ✅ Tamam |
+| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | ✅ Tamam |
 | Streamlit kabuğu | `ttp_similarity/app/streamlit_app.py` | Çalışır (ekranlar TODO) |
 | STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` | **TODO** |
-| Ağırlıklandırma, vektör, benzerlik, kümeleme, sorgu | `ttp_similarity/engine/*` | **TODO** |
 | Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | **TODO** |
 | Görselleştirme ve ekranlar | `ttp_similarity/app/{plots,views}.py` | **TODO** |
 
@@ -152,20 +156,40 @@ python -m ttp_similarity.data.mock_dataset
 # 1b) Gerçek veri seti (data modülü tamamlandığında)
 python -m ttp_similarity.data.build --dataset mitre
 
-# 2) Motor artefaktları: ağırlıklar, vektörler, benzerlik matrisi, kümeler
+# 2) Motor artefaktları: ağırlıklar, vektörler, benzerlik matrisi, kümeler ✅
 python -m ttp_similarity.engine.build --dataset mock
 
-# 3) Komut satırından sorgu
+# 3) Komut satırından sorgu ✅
 python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
 
-# 4) Başarım testi
+# 3b) JSON çıktı ✅
+python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock --json
+
+# 4) Başarım testi (evaluation modülü tamamlandığında)
 python -m ttp_similarity.evaluation.benchmark --dataset mock
 
 # 5) Arayüz
 streamlit run ttp_similarity/app/streamlit_app.py
 
-# Testler
+# Testler ✅
 pytest
+```
+
+### Python API ile kullanım
+
+```python
+from ttp_similarity.engine import rank_actors
+
+# Gözlemlenen teknikleri sorgula
+results = rank_actors(["T1566", "T1059", "T1078", "T1003"], top_k=5)
+
+for r in results:
+    print(f"{r['actor_name']:<24} "
+          f"score={r['similarity_score']:.3f}  "
+          f"confidence={r['confidence_level']}  "
+          f"matched={r['match_count']}")
+    for ev in r["evidence"][:3]:
+        print(f"  ↳ {ev['technique_id']} ({ev['technique_name']}): {ev['contribution']:.1%}")
 ```
 
 `--dataset` her komutta aynı anlama gelir: `mock` (sahte veri) veya `mitre` (gerçek ATT&CK). İki veri seti aynı dosya sözleşmesini ürettiği için tüm alt modüller ikisiyle de ayrım gözetmeden çalışır.
@@ -195,6 +219,10 @@ ttp-similarity-engine/
 │   ├── figures/<veri-seti>/     # üretilen grafikler
 │   └── reports/<veri-seti>/     # başarım raporları
 ├── tests/
+│   ├── test_contract.py         # modüller arası sözleşme testleri
+│   ├── test_engine.py           # motor modülü birim testleri
+│   ├── test_mock_dataset.py     # sahte veri seti testleri
+│   └── test_python_pin.py       # Python sürüm sabiti testleri
 ├── check_setup.py               # tek komutla kurulum doğrulama
 ├── .python-version              # 3.11 (pyenv sürüm sabiti, versiyonlanır)
 ├── pyproject.toml               # requires-python = ">=3.11,<3.12"
@@ -231,14 +259,74 @@ Yaptığı iş:
 
 ### `engine/` — ağırlıklandırma, benzerlik, kümeleme, sorgu
 
+> **Bu modül tamamen implement edilmiştir.**
+
 Temel fikir: **nadir teknikler ayırt edicidir, yaygın teknikler değildir.** Aktör = doküman, teknik = terim kabul edilir; ATT&CK sayım değil varlık bilgisi verdiği için terim frekansı ikilidir ve tüm sinyal IDF tarafındadır.
 
-- `weighting.py` — teknik ağırlıkları (`smooth_idf` varsayılan) → `weights.csv`
-- `vectorize.py` — aktörlerin ve sorguların ortak vektör uzayına taşınması → `vector_space.npz`
-- `similarity.py` — aktörler arası benzerlik matrisi (kosinüs) → `similarity.npz`
-- `clustering.py` — davranışsal kümeler → `clusters.csv`
-- `confidence.py` — üç bileşenli güven skoru
-- `query.py` — sorgu modu: teknik listesi → sıralı aday aktör listesi
+#### Pipeline
+
+| Adım | Dosya | Çıktı | Açıklama |
+|---|---|---|---|
+| 1 | `weighting.py` | `weights.csv` | Her tekniğin kaç aktörde geçtiğinden IDF ağırlığı hesaplanır |
+| 2 | `vectorize.py` | `vector_space.npz` | Her aktör, kullandığı tekniklerin IDF ağırlıklarıyla bir vektör olarak temsil edilir |
+| 3 | `similarity.py` | `similarity.npz` | Aktörler arası cosine similarity matrisi üretilir |
+| 4 | `clustering.py` | `clusters.csv` | Agglomerative clustering ile davranışsal kümeler oluşturulur |
+| 5 | `query.py` | — | Kullanıcının verdiği teknik listesi aynı vektör uzayına yansıtılıp aktörlerle karşılaştırılır |
+| 6 | `confidence.py` | — | Sorgu sonucunun güvenilirliği üç bileşenden hesaplanır |
+
+#### IDF formülü
+
+Yaygın tekniklerin etkisini azaltmak, nadir olanların etkisini artırmak için smoothed IDF kullanılır:
+
+```
+idf(t) = ln((N + 1) / (df(t) + 1)) + 1
+```
+
+- `N` = toplam aktör sayısı
+- `df(t)` = tekniği kullanan aktör sayısı
+- `+1` zemin, evrensel bir tekniğin ağırlığını sıfır yerine 1'de tutar
+
+Alternatif şemalar (`plain_idf`, `binary`) `config.WEIGHTING_SCHEME` ile seçilebilir.
+
+#### `rank_actors()` — yüksek seviyeli sorgu API'si
+
+Motor modülü, kullanıcının doğrudan çağırabileceği bir convenience fonksiyonu sunar:
+
+```python
+from ttp_similarity.engine import rank_actors
+
+results = rank_actors(["T1566", "T1059", "T1078", "T1003"], top_k=5)
+
+for r in results:
+    print(f"{r['actor_name']:<24} score={r['similarity_score']:.3f}  "
+          f"confidence={r['confidence_level']}  "
+          f"matched={r['match_count']}/{len(r['matched_techniques'])}")
+```
+
+Her aday için dönen alanlar:
+
+| Alan | Açıklama |
+|---|---|
+| `actor_id` / `actor_name` | Aktör kimliği ve adı |
+| `similarity_score` | Cosine similarity (0–1) |
+| `confidence_score` / `confidence_level` | Güven skoru (0–1) ve etiketi (`high` / `medium` / `low`) |
+| `matched_techniques` | Aktörle eşleşen teknik ID'leri |
+| `match_count` | Eşleşen teknik sayısı |
+| `technique_coverage` | Eşleşen / sorgulanan teknik oranı |
+| `evidence` | Sonucu en fazla etkileyen yüksek-IDF teknikler (contribution payıyla) |
+
+#### Edge case'ler
+
+| Durum | Davranış |
+|---|---|
+| Boş teknik listesi | Boş sonuç, `LOW` confidence |
+| Duplicate teknik ID'leri | Otomatik de-duplicate edilir |
+| Bilinmeyen teknik ID'leri | `unknown_technique_ids` olarak raporlanır, sessizce atılmaz |
+| Tek teknikle sorgu | Çalışır, `sufficiency` düşük olacağından confidence düşer |
+| Hiçbir aktörle eşleşmeyen sorgu | Boş aday listesi, `LOW` confidence |
+| Top-1 ve top-2 çok yakın | `margin` bileşeni düşer → confidence düşer |
+
+#### Güven skoru (confidence)
 
 **Güven skoru üç bileşenden oluşur** (ayrıntı ve eşikler `DECISIONS.md`):
 
@@ -249,6 +337,8 @@ Temel fikir: **nadir teknikler ayırt edicidir, yaygın teknikler değildir.** A
 | **Yeterlilik (sufficiency)** | Karar vermeye yetecek kadar teknik girildi mi? | 0.25 |
 
 Sonuç **yüksek / orta / düşük** olarak etiketlenir. Sorgu çıktısı ayrıca **hangi tekniklerin sonucu belirlediğini** (`evidence`) ve **aday aktörde görülmeyen sorgu tekniklerini** (`missing_technique_ids`) döndürür — açıklanamayan bir sıralama kullanılabilir istihbarat değildir.
+
+> **Güven skoru bir olasılık değildir** ve kesin attribution (faillik atfı) izlenimi vermez. Sistem `"Bu APT29'dur"` değil, `"Gözlemlenen davranış en çok APT29 ile benzerlik gösteriyor"` mantığında çalışır.
 
 ### `evaluation/` — başarım testi
 

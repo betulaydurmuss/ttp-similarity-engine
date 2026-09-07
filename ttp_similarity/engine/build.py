@@ -56,20 +56,26 @@ def build_engine(
     actors = storage.read_actors(workspace.actors, dataset)
     frequency = storage.read_dataframe(workspace.technique_frequency, dataset)
 
-    # TODO(engine): weights_frame = weighting.compute_weights(frequency, len(actors), scheme)
-    # TODO(engine): storage.write_dataframe(weights_frame, workspace.weights, WEIGHT_COLUMNS)
-    # TODO(engine): space = vectorize.build_vector_space(actors, weighting.weights_to_mapping(weights_frame))
-    # TODO(engine): storage.write_vector_space(space, workspace.vector_space)
-    # TODO(engine): sim = similarity_mod.compute_similarity(space, metric)
-    # TODO(engine): storage.write_similarity(sim, workspace.similarity)
-    # TODO(engine): if not skip_clustering:
-    #                   assignments = clustering.cluster_actors(sim)
-    #                   frame = clustering.clusters_to_frame(assignments, {a.actor_id: a.name for a in actors})
-    #                   storage.write_dataframe(frame, workspace.clusters, CLUSTER_COLUMNS)
-    # TODO(engine): print similarity_mod.similarity_stats(sim) -- a mean cosine
-    #   above ~0.8 means the weighting is not separating actors, and is the
-    #   first thing to check on a fresh build.
-    raise NotImplementedError("build_engine")
+    from ..schema import CLUSTER_COLUMNS
+
+    weights_frame = weighting.compute_weights(frequency, len(actors), scheme)
+    storage.write_dataframe(weights_frame, workspace.weights, WEIGHT_COLUMNS)
+
+    space = vectorize.build_vector_space(actors, weighting.weights_to_mapping(weights_frame))
+    storage.write_vector_space(space, workspace.vector_space)
+
+    sim = similarity_mod.compute_similarity(space, metric)
+    storage.write_similarity(sim, workspace.similarity)
+
+    if not skip_clustering:
+        assignments = clustering.cluster_actors(sim)
+        frame = clustering.clusters_to_frame(assignments, {a.actor_id: a.name for a in actors})
+        storage.write_dataframe(frame, workspace.clusters, CLUSTER_COLUMNS)
+
+    stats = similarity_mod.similarity_stats(sim)
+    print(f"Similarity stats: {stats}")
+
+    return workspace
 
 
 def main(argv: list[str] | None = None) -> int:
