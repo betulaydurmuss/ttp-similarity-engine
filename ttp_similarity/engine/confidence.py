@@ -58,7 +58,8 @@ def rarity_component(
     # TODO(engine): consider the mean vs. the max here -- the mean punishes a
     #   query that pads one rare technique with commodity ones, which is the
     #   behaviour we want. Record the choice in DECISIONS.md.
-    raise NotImplementedError("rarity_component")
+    from . import weighting
+    return weighting.normalized_rarity(tuple(matched_technique_ids), weights)
 
 
 def margin_component(
@@ -79,7 +80,12 @@ def margin_component(
         runner-up, ``0.0`` when ``top_score <= 0``.
     """
     # TODO(engine): guard top_score <= 0 before dividing.
-    raise NotImplementedError("margin_component")
+    if top_score <= 0:
+        return 0.0
+    if runner_up_score is None:
+        return 1.0
+    gap = (top_score - runner_up_score) / top_score
+    return min(1.0, gap / saturation)
 
 
 def sufficiency_component(
@@ -99,7 +105,10 @@ def sufficiency_component(
         ``clip((n - minimum) / (saturation - minimum), 0, 1)``.
     """
     # TODO(engine): guard saturation <= minimum (would divide by zero).
-    raise NotImplementedError("sufficiency_component")
+    if saturation <= minimum:
+        return 1.0 if known_technique_count >= minimum else 0.0
+    value = (known_technique_count - minimum) / (saturation - minimum)
+    return max(0.0, min(1.0, value))
 
 
 def level_for_score(
@@ -148,7 +157,20 @@ def score_confidence(
     # TODO(engine): consider a hard override -- fewer than
     #   config.MIN_QUERY_TECHNIQUES known techniques can never be better than
     #   LOW, regardless of how rare they are. Decide, then document it.
-    raise NotImplementedError("score_confidence")
+    if not candidates:
+        return ConfidenceBreakdown(rarity=0.0, margin=0.0, sufficiency=0.0, score=0.0, level=ConfidenceLevel.LOW)
+    top = candidates[0]
+    runner_up_score = candidates[1].score if len(candidates) > 1 else None
+    rarity = rarity_component(top.matched_technique_ids, weights)
+    margin = margin_component(top.score, runner_up_score)
+    sufficiency = sufficiency_component(len(known_technique_ids))
+    score = (rarity * component_weights['rarity'] + margin * component_weights['margin'] + sufficiency * component_weights['sufficiency'])
+    score = max(0.0, min(1.0, score))
+    if len(known_technique_ids) < config.MIN_QUERY_TECHNIQUES:
+        level = ConfidenceLevel.LOW
+    else:
+        level = level_for_score(score)
+    return ConfidenceBreakdown(rarity=rarity, margin=margin, sufficiency=sufficiency, score=score, level=level)
 
 
 def explain(breakdown: ConfidenceBreakdown) -> list[str]:
@@ -167,4 +189,15 @@ def explain(breakdown: ConfidenceBreakdown) -> list[str]:
     # TODO(engine): threshold each component (< 0.34 -> weak) and emit the
     #   matching message. Keep the strings here, not in the app, so the CLI and
     #   the UI say the same thing.
-    raise NotImplementedError("explain")
+    reasons = []
+    WEAK_THRESHOLD = 0.34
+    components = [
+        ('rarity', breakdown.rarity, 'Eslesen teknikler yaygin ve ayirt edici degil'),
+        ('margin', breakdown.margin, 'Aday 1 ve 2 arasindaki fark cok kucuk'),
+        ('sufficiency', breakdown.sufficiency, 'Girilen teknik sayisi az')
+    ]
+    components.sort(key=lambda x: x[1])
+    for name, value, msg in components:
+        if value < WEAK_THRESHOLD:
+            reasons.append(msg)
+    return reasons

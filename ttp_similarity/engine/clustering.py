@@ -30,7 +30,10 @@ def to_distance_matrix(similarity: SimilarityMatrix) -> np.ndarray:
     """
     # TODO(engine): np.clip(1.0 - similarity.matrix, 0.0, 1.0);
     #   np.fill_diagonal(distance, 0.0); symmetrise with (d + d.T) / 2.
-    raise NotImplementedError("to_distance_matrix")
+    distance = np.clip(1.0 - similarity.matrix, 0.0, 1.0)
+    np.fill_diagonal(distance, 0.0)
+    distance = (distance + distance.T) / 2
+    return distance
 
 
 def cluster_actors(
@@ -68,7 +71,28 @@ def cluster_actors(
     #   DECISIONS.md before implementing.
     # TODO(engine): apply the MIN_CLUSTER_SIZE relabelling last, and renumber
     #   the surviving clusters from 0 so ids are stable and dense.
-    raise NotImplementedError("cluster_actors")
+    from sklearn.cluster import AgglomerativeClustering
+    from collections import Counter
+    distance = to_distance_matrix(similarity)
+    if method == 'agglomerative':
+        if n_clusters is not None:
+            model = AgglomerativeClustering(n_clusters=n_clusters, metric='precomputed', linkage=linkage)
+        else:
+            model = AgglomerativeClustering(n_clusters=None, distance_threshold=distance_threshold, metric='precomputed', linkage=linkage)
+        labels = model.fit_predict(distance)
+    else:
+        raise ValueError(f'Unknown clustering method: {method}')
+    # Apply MIN_CLUSTER_SIZE relabelling
+    counts = Counter(labels)
+    small_clusters = {c for c, n in counts.items() if n < config.MIN_CLUSTER_SIZE}
+    # Relabel small clusters to -1
+    final_labels = [(-1 if l in small_clusters else l) for l in labels]
+    # Renumber surviving clusters from 0
+    unique_surviving = sorted(set(l for l in final_labels if l != -1))
+    remap = {old: new for new, old in enumerate(unique_surviving)}
+    remap[-1] = -1
+    final_labels = [remap[l] for l in final_labels]
+    return {similarity.actor_ids[i]: final_labels[i] for i in range(len(similarity.actor_ids))}
 
 
 def clusters_to_frame(
@@ -115,7 +139,17 @@ def order_for_heatmap(
     """
     # TODO(engine): scipy.cluster.hierarchy.linkage on the condensed distance
     #   (scipy.spatial.distance.squareform) then leaves_list(optimal_leaf_ordering(...)).
-    raise NotImplementedError("order_for_heatmap")
+    from scipy.cluster.hierarchy import linkage as scipy_linkage, leaves_list
+    from scipy.spatial.distance import squareform
+    distance = to_distance_matrix(similarity)
+    n = len(similarity.actor_ids)
+    if n <= 1:
+        return list(range(n))
+    # Ensure perfect symmetry for squareform
+    np.fill_diagonal(distance, 0.0)
+    condensed = squareform(distance, checks=False)
+    Z = scipy_linkage(condensed, method='average')
+    return list(leaves_list(Z).astype(int))
 
 
 def cluster_profile(

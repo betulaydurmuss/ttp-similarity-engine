@@ -58,11 +58,32 @@ def build_vector_space(
     Raises:
         ValueError: If ``actors`` is empty, or a technique has no weight.
     """
-    # TODO(engine): allocate np.zeros((n_actors, n_techniques)); fill via the
-    #   technique index; sklearn.preprocessing.normalize(matrix, norm="l2")
-    #   when normalize is on. Guard against all-zero rows before normalising
-    #   (an actor whose techniques all weigh 0 under plain_idf).
-    raise NotImplementedError("build_vector_space")
+    if not actors:
+        raise ValueError("actors must not be empty")
+
+    vocab = build_vocabulary(actors)
+    tech_idx = {tid: j for j, tid in enumerate(vocab)}
+    n_actors = len(actors)
+    n_techniques = len(vocab)
+
+    matrix = np.zeros((n_actors, n_techniques), dtype=np.float64)
+    for i, actor in enumerate(actors):
+        for tid in actor.technique_ids:
+            j = tech_idx.get(tid)
+            if j is not None:
+                w = weights.get(tid)
+                if w is None:
+                    raise ValueError(f"technique {tid} has no weight")
+                matrix[i, j] = w
+
+    if normalize:
+        # Guard against all-zero rows: normalization would produce NaN.
+        row_norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        row_norms[row_norms == 0] = 1.0  # leave zero rows as zero
+        matrix = matrix / row_norms
+
+    actor_ids = tuple(a.actor_id for a in actors)
+    return VectorSpace(actor_ids=actor_ids, technique_ids=vocab, matrix=matrix)
 
 
 def vectorize_query(
@@ -89,11 +110,26 @@ def vectorize_query(
         ``(vector, known_ids, unknown_ids)`` where ``vector`` has shape
         ``(n_techniques,)``.
     """
-    # TODO(engine): split input against space.technique_index(); build the
-    #   weighted vector over known ids; normalise. Return a zero vector when
-    #   nothing is known -- the caller turns that into an empty result with
-    #   LOW confidence rather than an exception.
-    raise NotImplementedError("vectorize_query")
+    tech_idx = space.technique_index()
+    known: list[TechniqueId] = []
+    unknown: list[TechniqueId] = []
+    for tid in technique_ids:
+        if tid in tech_idx:
+            known.append(tid)
+        else:
+            unknown.append(tid)
+
+    vector = np.zeros(space.n_techniques, dtype=np.float64)
+    for tid in known:
+        j = tech_idx[tid]
+        vector[j] = weights.get(tid, 0.0)
+
+    if normalize:
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector = vector / norm
+
+    return vector, tuple(known), tuple(unknown)
 
 
 def to_binary(space: VectorSpace) -> np.ndarray:
