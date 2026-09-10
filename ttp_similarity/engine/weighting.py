@@ -30,15 +30,19 @@ Owner: engine module.
 
 from __future__ import annotations
 
+import math
 from typing import Mapping
 
+import numpy as np
 import pandas as pd
 
 from .. import config
 from ..schema import TechniqueId
 
 
-def idf(document_frequency: int, n_documents: int, smoothing: float = config.IDF_SMOOTHING) -> float:
+def idf(
+    document_frequency: int, n_documents: int, smoothing: float | None = None
+) -> float:
     """Smoothed inverse document frequency for a single technique.
 
     Args:
@@ -52,19 +56,18 @@ def idf(document_frequency: int, n_documents: int, smoothing: float = config.IDF
     Raises:
         ValueError: If ``n_documents <= 0`` or ``document_frequency < 0``.
     """
+    smoothing = config.IDF_SMOOTHING if smoothing is None else smoothing
     if n_documents <= 0:
         raise ValueError(f"n_documents must be > 0, got {n_documents}")
     if document_frequency < 0:
         raise ValueError(f"document_frequency must be >= 0, got {document_frequency}")
-    
-    import math
     return math.log((n_documents + smoothing) / (document_frequency + smoothing)) + 1
 
 
 def compute_weights(
     frequency: pd.DataFrame,
     n_actors: int,
-    scheme: str = config.WEIGHTING_SCHEME,
+    scheme: str | None = None,
 ) -> pd.DataFrame:
     """Turn the frequency table into per-technique weights.
 
@@ -81,8 +84,7 @@ def compute_weights(
     Raises:
         ValueError: On an unknown scheme or an empty frequency table.
     """
-    import numpy as np
-
+    scheme = config.WEIGHTING_SCHEME if scheme is None else scheme
     if frequency.empty:
         raise ValueError("empty frequency table")
         

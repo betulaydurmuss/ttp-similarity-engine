@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 
 from .. import config, paths, storage
-from ..schema import WEIGHT_COLUMNS
+from ..schema import CLUSTER_COLUMNS, WEIGHT_COLUMNS
 from . import clustering, similarity as similarity_mod, vectorize, weighting
 
 
@@ -56,8 +56,6 @@ def build_engine(
     actors = storage.read_actors(workspace.actors, dataset)
     frequency = storage.read_dataframe(workspace.technique_frequency, dataset)
 
-    from ..schema import CLUSTER_COLUMNS
-
     weights_frame = weighting.compute_weights(frequency, len(actors), scheme)
     storage.write_dataframe(weights_frame, workspace.weights, WEIGHT_COLUMNS)
 
@@ -81,7 +79,12 @@ def build_engine(
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point: ``python -m ttp_similarity.engine.build``."""
     parser = argparse.ArgumentParser(description="Build weights, vectors, similarity, clusters.")
-    parser.add_argument("--dataset", default=paths.DEFAULT_DATASET)
+    parser.add_argument(
+        "--dataset",
+        default=paths.DEFAULT_DATASET,
+        choices=list(paths.KNOWN_DATASETS),
+        help="which dataset to work on",
+    )
     parser.add_argument(
         "--scheme",
         default=config.WEIGHTING_SCHEME,

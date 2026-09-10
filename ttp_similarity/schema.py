@@ -105,6 +105,9 @@ EVALUATION_TRIAL_COLUMNS: tuple[str, ...] = (
     "rank",  # 1-based rank of the true actor, or -1 if outside top-k
     "top1_score",
     "confidence_level",
+    "technique_count",  # how many techniques the true actor has in total
+    "noise_count",  # injected techniques the true actor does not use
+    "confidence_score",  # raw combined score, so thresholds can be re-swept
 )
 
 
@@ -128,7 +131,7 @@ class Actor:
         name: Canonical display name.
         aliases: Other names merged into this identity. Excludes ``name``.
         technique_ids: Sorted, unique, parent-level ATT&CK technique ids.
-        source: Provenance tag, e.g. ``"mitre"`` or ``"mock"``.
+        source: Provenance tag, e.g. ``"attck"`` or ``"mock"``.
         metadata: Free-form extras (ATT&CK version, mock ground-truth family...).
             Do not rely on a key here across module boundaries.
     """
@@ -137,7 +140,7 @@ class Actor:
     name: str
     aliases: tuple[str, ...] = ()
     technique_ids: tuple[TechniqueId, ...] = ()
-    source: str = "mitre"
+    source: str = "attck"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -154,7 +157,7 @@ class Actor:
             name=str(data["name"]),
             aliases=tuple(data.get("aliases") or ()),
             technique_ids=tuple(data.get("technique_ids") or ()),
-            source=str(data.get("source", "mitre")),
+            source=str(data.get("source", "attck")),
             metadata=dict(data.get("metadata") or {}),
         )
 
@@ -415,6 +418,13 @@ class EvaluationTrial:
     rank: int  # 1-based rank of the true actor; -1 when outside top-k
     top1_score: float
     confidence_level: ConfidenceLevel
+    #: Total technique count of the true actor, for the size-vs-accuracy split.
+    technique_count: int = 0
+    #: Injected techniques the true actor does not use (noisy regimes).
+    noise_count: int = 0
+    #: Raw combined confidence score. Stored alongside the thresholded level so
+    #: a threshold sweep can be run after the fact without re-running trials.
+    confidence_score: float = 0.0
 
     @property
     def is_top1(self) -> bool:
@@ -423,6 +433,10 @@ class EvaluationTrial:
     @property
     def is_top3(self) -> bool:
         return 1 <= self.rank <= 3
+
+    @property
+    def is_top5(self) -> bool:
+        return 1 <= self.rank <= 5
 
     def to_row(self) -> dict[str, Any]:
         """Flatten to one :data:`EVALUATION_TRIAL_COLUMNS` CSV row."""
@@ -435,6 +449,9 @@ class EvaluationTrial:
             "rank": self.rank,
             "top1_score": self.top1_score,
             "confidence_level": self.confidence_level.value,
+            "technique_count": self.technique_count,
+            "noise_count": self.noise_count,
+            "confidence_score": self.confidence_score,
         }
 
 
@@ -448,10 +465,25 @@ class EvaluationReport:
     top1_accuracy: float
     top3_accuracy: float
     mean_reciprocal_rank: float
+    top5_accuracy: float = 0.0
+    #: Mean 1-based rank of the true actor. Misses are excluded and counted in
+    #: ``miss_count`` instead, because averaging a sentinel would be meaningless.
+    mean_rank: float = 0.0
+    miss_count: int = 0
+    #: Repetitions skipped because the query would have held too few techniques.
+    skipped_trials: int = 0
+    #: Measurement regime this run belongs to ("A", "B", "C").
+    regime: str = ""
+    #: Actors in the dataset this run was scored against.
+    actor_count: int = 0
+    #: Human-readable label for the configuration under test.
+    label: str = ""
     #: sample size -> {"top1": float, "top3": float, "mrr": float, "n": int}
     by_sample_size: Mapping[int, Mapping[str, float]] = field(default_factory=dict)
     #: confidence level value -> {"top1": float, "share": float, "n": int}
     by_confidence: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
+    #: technique-count bucket -> {"top1": float, "mrr": float, "n": int}
+    by_technique_count: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     seed: int | None = None
     notes: str = ""
 
@@ -460,7 +492,20 @@ class EvaluationReport:
         data["sample_sizes"] = list(self.sample_sizes)
         data["by_sample_size"] = {str(k): dict(v) for k, v in self.by_sample_size.items()}
         data["by_confidence"] = {str(k): dict(v) for k, v in self.by_confidence.items()}
+        data["by_technique_count"] = {
+            str(k): dict(v) for k, v in self.by_technique_count.items()
+        }
         return data
+
+    def headline(self) -> dict[str, float]:
+        """The five numbers every comparison table is built from."""
+        return {
+            "top1": self.top1_accuracy,
+            "top3": self.top3_accuracy,
+            "top5": self.top5_accuracy,
+            "mrr": self.mean_reciprocal_rank,
+            "mean_rank": self.mean_rank,
+        }
 
 
 # --------------------------------------------------------------------------- #

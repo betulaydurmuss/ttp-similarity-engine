@@ -37,6 +37,7 @@ _PRODUCER_HINTS: Mapping[str, str] = {
     "techniques.csv": "python -m ttp_similarity.data.build --dataset {dataset}",
     "technique_frequency.csv": "python -m ttp_similarity.data.build --dataset {dataset}",
     "manifest.json": "python -m ttp_similarity.data.build --dataset {dataset}",
+    "build_stats.json": "python -m ttp_similarity.data.build --dataset {dataset}",
     "weights.csv": "python -m ttp_similarity.engine.build --dataset {dataset}",
     "vector_space.npz": "python -m ttp_similarity.engine.build --dataset {dataset}",
     "similarity.npz": "python -m ttp_similarity.engine.build --dataset {dataset}",

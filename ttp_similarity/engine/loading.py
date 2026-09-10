@@ -21,7 +21,7 @@ def load_engine(
     """Read every artefact the query path and the UI need.
 
     Args:
-        dataset: Workspace name (``"mock"`` / ``"mitre"``).
+        dataset: Workspace name (``"mock"`` / ``"attck"``).
         with_similarity: Also load ``similarity.npz`` and ``clusters.csv``.
             Set ``False`` in the benchmark, which only needs the vector space.
 

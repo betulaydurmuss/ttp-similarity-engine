@@ -38,7 +38,7 @@ def build_vector_space(
     actors: Sequence[Actor],
     weights: Mapping[TechniqueId, float],
     *,
-    normalize: bool = config.NORMALIZE_VECTORS,
+    normalize: bool | None = None,
 ) -> VectorSpace:
     """Build the weighted actor x technique matrix.
 
@@ -58,6 +58,7 @@ def build_vector_space(
     Raises:
         ValueError: If ``actors`` is empty, or a technique has no weight.
     """
+    normalize = config.NORMALIZE_VECTORS if normalize is None else normalize
     if not actors:
         raise ValueError("actors must not be empty")
 
@@ -91,7 +92,7 @@ def vectorize_query(
     space: VectorSpace,
     weights: Mapping[TechniqueId, float],
     *,
-    normalize: bool = config.NORMALIZE_VECTORS,
+    normalize: bool | None = None,
 ) -> tuple[np.ndarray, tuple[TechniqueId, ...], tuple[TechniqueId, ...]]:
     """Project a user-supplied technique list into the actor vector space.
 
@@ -110,6 +111,7 @@ def vectorize_query(
         ``(vector, known_ids, unknown_ids)`` where ``vector`` has shape
         ``(n_techniques,)``.
     """
+    normalize = config.NORMALIZE_VECTORS if normalize is None else normalize
     tech_idx = space.technique_index()
     known: list[TechniqueId] = []
     unknown: list[TechniqueId] = []

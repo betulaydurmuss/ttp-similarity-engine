@@ -37,6 +37,7 @@ from __future__ import annotations
 from typing import Mapping, Sequence
 
 from .. import config
+from . import weighting
 from ..schema import Candidate, ConfidenceBreakdown, ConfidenceLevel, TechniqueId
 
 
@@ -54,18 +55,13 @@ def rarity_component(
         Mean matched weight divided by the maximum weight in the dataset;
         ``0.0`` when nothing matched.
     """
-    # TODO(engine): delegate to weighting.normalized_rarity().
-    # TODO(engine): consider the mean vs. the max here -- the mean punishes a
-    #   query that pads one rare technique with commodity ones, which is the
-    #   behaviour we want. Record the choice in DECISIONS.md.
-    from . import weighting
     return weighting.normalized_rarity(tuple(matched_technique_ids), weights)
 
 
 def margin_component(
     top_score: float,
     runner_up_score: float | None,
-    saturation: float = config.MARGIN_SATURATION,
+    saturation: float | None = None,
 ) -> float:
     """Separation between candidate #1 and #2, in ``[0, 1]``.
 
@@ -79,7 +75,7 @@ def margin_component(
         ``min(1, ((top - second) / top) / saturation)``; ``1.0`` when there is no
         runner-up, ``0.0`` when ``top_score <= 0``.
     """
-    # TODO(engine): guard top_score <= 0 before dividing.
+    saturation = config.MARGIN_SATURATION if saturation is None else saturation
     if top_score <= 0:
         return 0.0
     if runner_up_score is None:
@@ -90,8 +86,8 @@ def margin_component(
 
 def sufficiency_component(
     known_technique_count: int,
-    minimum: int = config.MIN_QUERY_TECHNIQUES,
-    saturation: int = config.SUFFICIENCY_SATURATION,
+    minimum: int | None = None,
+    saturation: int | None = None,
 ) -> float:
     """Whether enough input was supplied to judge, in ``[0, 1]``.
 
@@ -104,7 +100,8 @@ def sufficiency_component(
     Returns:
         ``clip((n - minimum) / (saturation - minimum), 0, 1)``.
     """
-    # TODO(engine): guard saturation <= minimum (would divide by zero).
+    minimum = config.MIN_QUERY_TECHNIQUES if minimum is None else minimum
+    saturation = config.SUFFICIENCY_SATURATION if saturation is None else saturation
     if saturation <= minimum:
         return 1.0 if known_technique_count >= minimum else 0.0
     value = (known_technique_count - minimum) / (saturation - minimum)
@@ -113,8 +110,8 @@ def sufficiency_component(
 
 def level_for_score(
     score: float,
-    high: float = config.CONFIDENCE_HIGH_THRESHOLD,
-    medium: float = config.CONFIDENCE_MEDIUM_THRESHOLD,
+    high: float | None = None,
+    medium: float | None = None,
 ) -> ConfidenceLevel:
     """Map a combined score onto a :class:`~ttp_similarity.schema.ConfidenceLevel`.
 
@@ -126,6 +123,8 @@ def level_for_score(
     Returns:
         ``HIGH`` / ``MEDIUM`` / ``LOW``.
     """
+    high = config.CONFIDENCE_HIGH_THRESHOLD if high is None else high
+    medium = config.CONFIDENCE_MEDIUM_THRESHOLD if medium is None else medium
     if score >= high:
         return ConfidenceLevel.HIGH
     if score >= medium:
@@ -137,7 +136,7 @@ def score_confidence(
     candidates: Sequence[Candidate],
     known_technique_ids: Sequence[TechniqueId],
     weights: Mapping[TechniqueId, float],
-    component_weights: Mapping[str, float] = config.CONFIDENCE_COMPONENT_WEIGHTS,
+    component_weights: Mapping[str, float] | None = None,
 ) -> ConfidenceBreakdown:
     """Compute the full confidence breakdown for a ranked candidate list.
 
@@ -152,11 +151,8 @@ def score_confidence(
         components, the combined score and the level. An empty candidate list
         yields all-zero components and ``LOW``.
     """
-    # TODO(engine): compute the three components, combine as a weighted sum,
-    #   clip to [0, 1], and call level_for_score().
-    # TODO(engine): consider a hard override -- fewer than
-    #   config.MIN_QUERY_TECHNIQUES known techniques can never be better than
-    #   LOW, regardless of how rare they are. Decide, then document it.
+    if component_weights is None:
+        component_weights = config.CONFIDENCE_COMPONENT_WEIGHTS
     if not candidates:
         return ConfidenceBreakdown(rarity=0.0, margin=0.0, sufficiency=0.0, score=0.0, level=ConfidenceLevel.LOW)
     top = candidates[0]
@@ -177,8 +173,8 @@ def explain(breakdown: ConfidenceBreakdown) -> list[str]:
     """Short human-readable reasons behind a confidence level.
 
     Turns the weakest component(s) into sentences the UI can show under the
-    badge, e.g. "Aday 1 ve 2 arasindaki fark cok kucuk" or "Girilen teknik
-    sayisi az".
+    badge, e.g. "Aday 1 ve 2 arasındaki fark çok küçük" or "Girilen teknik
+    sayısı az".
 
     Args:
         breakdown: Result of :func:`score_confidence`.
@@ -186,15 +182,12 @@ def explain(breakdown: ConfidenceBreakdown) -> list[str]:
     Returns:
         Zero or more Turkish explanation strings, ordered worst component first.
     """
-    # TODO(engine): threshold each component (< 0.34 -> weak) and emit the
-    #   matching message. Keep the strings here, not in the app, so the CLI and
-    #   the UI say the same thing.
     reasons = []
     WEAK_THRESHOLD = 0.34
     components = [
-        ('rarity', breakdown.rarity, 'Eslesen teknikler yaygin ve ayirt edici degil'),
-        ('margin', breakdown.margin, 'Aday 1 ve 2 arasindaki fark cok kucuk'),
-        ('sufficiency', breakdown.sufficiency, 'Girilen teknik sayisi az')
+        ('rarity', breakdown.rarity, 'Eşleşen teknikler yaygın ve ayırt edici değil'),
+        ('margin', breakdown.margin, 'Aday 1 ve 2 arasındaki fark çok küçük'),
+        ('sufficiency', breakdown.sufficiency, 'Girilen teknik sayısı az')
     ]
     components.sort(key=lambda x: x[1])
     for name, value, msg in components:

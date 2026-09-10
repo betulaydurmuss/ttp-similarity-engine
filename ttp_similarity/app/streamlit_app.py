@@ -98,13 +98,15 @@ def main() -> None:
         st.error(str(error))
         return
 
-    heatmap_tab, query_tab, dataset_tab = st.tabs(list(TAB_LABELS))
+    heatmap_tab, query_tab, case_tab = st.tabs(list(TAB_LABELS))
     with heatmap_tab:
         views.guard(lambda: views.render_heatmap_tab(artifacts), "views.render_heatmap_tab")
     with query_tab:
         views.guard(lambda: views.render_query_tab(artifacts), "views.render_query_tab")
-    with dataset_tab:
-        views.guard(lambda: views.render_dataset_tab(artifacts), "views.render_dataset_tab")
+    with case_tab:
+        views.guard(
+            lambda: views.render_case_study_tab(artifacts), "views.render_case_study_tab"
+        )
 
 
 main()

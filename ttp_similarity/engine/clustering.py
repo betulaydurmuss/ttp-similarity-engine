@@ -28,8 +28,6 @@ def to_distance_matrix(similarity: SimilarityMatrix) -> np.ndarray:
         ``1 - similarity``, clipped to ``[0, 1]``, with an exact zero diagonal
         (scipy rejects a condensed matrix whose diagonal is not zero).
     """
-    # TODO(engine): np.clip(1.0 - similarity.matrix, 0.0, 1.0);
-    #   np.fill_diagonal(distance, 0.0); symmetrise with (d + d.T) / 2.
     distance = np.clip(1.0 - similarity.matrix, 0.0, 1.0)
     np.fill_diagonal(distance, 0.0)
     distance = (distance + distance.T) / 2
@@ -62,15 +60,6 @@ def cluster_actors(
         ValueError: On an unknown method, or if both ``n_clusters`` and
             ``distance_threshold`` are ``None``.
     """
-    # TODO(engine): AgglomerativeClustering(metric="precomputed",
-    #   linkage=linkage, n_clusters=n_clusters,
-    #   distance_threshold=None if n_clusters else distance_threshold)
-    #   fitted on to_distance_matrix(similarity).
-    # TODO(engine): KMeans works on vectors, not distances -- if method is
-    #   "kmeans", take the VectorSpace instead. Decide and note it in
-    #   DECISIONS.md before implementing.
-    # TODO(engine): apply the MIN_CLUSTER_SIZE relabelling last, and renumber
-    #   the surviving clusters from 0 so ids are stable and dense.
     from sklearn.cluster import AgglomerativeClustering
     from collections import Counter
     distance = to_distance_matrix(similarity)
@@ -137,8 +126,6 @@ def order_for_heatmap(
     Returns:
         Row indices in display order.
     """
-    # TODO(engine): scipy.cluster.hierarchy.linkage on the condensed distance
-    #   (scipy.spatial.distance.squareform) then leaves_list(optimal_leaf_ordering(...)).
     from scipy.cluster.hierarchy import linkage as scipy_linkage, leaves_list
     from scipy.spatial.distance import squareform
     distance = to_distance_matrix(similarity)
