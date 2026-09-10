@@ -17,7 +17,7 @@ Layout::
         figures/<dataset>/        rendered plots
         reports/<dataset>/        evaluation reports, query logs
 
-``<dataset>`` is a workspace name -- ``"mitre"`` for the real ATT&CK build and
+``<dataset>`` is a workspace name -- ``"attck"`` for the real ATT&CK build and
 ``"mock"`` for the synthetic 15-actor fixture. Both are produced by the data
 module and consumed identically by everything downstream, which is what lets the
 engine and app be developed before the real ingestion is finished.
@@ -43,10 +43,15 @@ REPORTS_DIR: Path = OUTPUTS_DIR / "reports"
 #: Raw ATT&CK Enterprise STIX bundle, as downloaded (data.stix_download).
 ATTACK_BUNDLE_PATH: Path = RAW_DIR / "enterprise-attack.json"
 
+#: Provenance sidecar for the bundle: source URL, download timestamp, ETag,
+#: size, checksum and the ATT&CK release version. This is what lets a report
+#: state "ATT&CK vX, downloaded on YYYY-MM-DD" instead of "recent ATT&CK".
+ATTACK_BUNDLE_META_PATH: Path = RAW_DIR / "enterprise-attack.meta.json"
+
 #: Workspace names.
-MITRE_DATASET = "mitre"
+ATTCK_DATASET = "attck"
 MOCK_DATASET = "mock"
-KNOWN_DATASETS: tuple[str, ...] = (MITRE_DATASET, MOCK_DATASET)
+KNOWN_DATASETS: tuple[str, ...] = (ATTCK_DATASET, MOCK_DATASET)
 
 #: What the UI and the evaluation module open when no dataset is specified.
 #: Deliberately the mock set, so a fresh clone is usable before the real
@@ -65,7 +70,7 @@ class Workspace:
         weights = storage.read_dataframe(ws.weights)   # engine module output
 
     Attributes:
-        name: Dataset name, e.g. ``"mitre"`` or ``"mock"``.
+        name: Dataset name, e.g. ``"attck"`` or ``"mock"``.
     """
 
     name: str = DEFAULT_DATASET
@@ -120,6 +125,16 @@ class Workspace:
     def data_manifest(self) -> Path:
         """``manifest.json`` -- provenance for the build (source, version, counts)."""
         return self.root / "manifest.json"
+
+    @property
+    def build_stats(self) -> Path:
+        """``build_stats.json`` -- what the ingestion actually did.
+
+        Dropped-object counts, sub-technique roll-up before/after, alias merges,
+        technique-per-actor distribution. Written by the data module so a build
+        can be audited without re-running it.
+        """
+        return self.root / "build_stats.json"
 
     # ---------------------------------------- engine module outputs (stage 2)
     @property

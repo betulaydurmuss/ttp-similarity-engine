@@ -23,9 +23,10 @@ Bu depo şu anda **iskelet** aşamasındadır. Modüller arası arayüzler, veri
 | Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` | Tamam |
 | Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | Tamam |
 | Streamlit kabuğu | `ttp_similarity/app/streamlit_app.py` | Çalışır (ekranlar TODO) |
-| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` | **TODO** |
-| Ağırlıklandırma, vektör, benzerlik, kümeleme, sorgu | `ttp_similarity/engine/*` | **TODO** |
-| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | **TODO** |
+| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` | Tamam |
+| Ağırlıklandırma / vektör / benzerlik / sorgu / güven | `ttp_similarity/engine/*` | Tamam |
+| Kümeleme | `ttp_similarity/engine/clustering.py` | Tamam (`cluster_profile` hariç) |
+| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | Tamam |
 | Görselleştirme ve ekranlar | `ttp_similarity/app/{plots,views}.py` | **TODO** |
 
 ---
@@ -42,6 +43,8 @@ Bu depo şu anda **iskelet** aşamasındadır. Modüller arası arayüzler, veri
   - `relationship` (`relationship_type == "uses"`) → aktör → teknik ilişkisi
 - Alt teknikler ana tekniğe indirgenir (`T1059.003` → `T1059`). Gerekçesi `DECISIONS.md` içinde.
 - İndirilen paket `data/raw/` altında önbelleğe alınır; sonraki tüm aşamalar diskten okur, yani boru hattı çevrimdışı tekrarlanabilir.
+
+**Son build (ATT&CK Enterprise v19.2, 2026-09-07):** 149 aktör, 203 teknik, 3.667 aktör-teknik ilişkisi. Ayrıntılı sayımlar `data/processed/attck/build_stats.json` içinde.
 
 MITRE ATT&CK içeriği MITRE tarafından [ATT&CK Terms of Use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/) kapsamında sağlanır.
 
@@ -149,8 +152,9 @@ python check_setup.py
 # 1) Sahte veri seti (gerçek ATT&CK verisi olmadan denemek için)
 python -m ttp_similarity.data.mock_dataset
 
-# 1b) Gerçek veri seti (data modülü tamamlandığında)
-python -m ttp_similarity.data.build --dataset mitre
+# 1b) Gerçek veri seti: ATT&CK Enterprise (ilk çalıştırmada ~54 MB indirir)
+python -m ttp_similarity.data.build --dataset attck
+python -m ttp_similarity.data.build --dataset attck --force-download   # paketi tazele
 
 # 2) Motor artefaktları: ağırlıklar, vektörler, benzerlik matrisi, kümeler
 python -m ttp_similarity.engine.build --dataset mock
@@ -168,7 +172,7 @@ streamlit run ttp_similarity/app/streamlit_app.py
 pytest
 ```
 
-`--dataset` her komutta aynı anlama gelir: `mock` (sahte veri) veya `mitre` (gerçek ATT&CK). İki veri seti aynı dosya sözleşmesini ürettiği için tüm alt modüller ikisiyle de ayrım gözetmeden çalışır.
+`--dataset` her komutta aynı anlama gelir: `mock` (sahte veri) veya `attck` (gerçek ATT&CK). İki veri seti aynı dosya sözleşmesini ürettiği için tüm alt modüller ikisiyle de ayrım gözetmeden çalışır.
 
 ---
 
@@ -228,6 +232,9 @@ Yaptığı iş:
 | `techniques.csv` | `technique_id, technique_name, tactics` |
 | `technique_frequency.csv` | `technique_id, technique_name, actor_count, actor_ratio` |
 | `manifest.json` | Kaynak, ATT&CK sürümü, üretim zamanı, sayımlar |
+| `build_stats.json` | Elenen nesne sayıları, indirgeme öncesi/sonrası, takma ad birleşmeleri |
+
+İndirilen paketin yanına `data/raw/enterprise-attack.meta.json` yazılır: kaynak URL, indirme zamanı, ETag, boyut, SHA-256 ve ATT&CK sürümü — raporda "şu tarihli şu sürüm kullanıldı" diyebilmek için.
 
 ### `engine/` — ağırlıklandırma, benzerlik, kümeleme, sorgu
 

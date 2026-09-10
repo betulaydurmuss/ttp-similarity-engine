@@ -10,11 +10,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
-from matplotlib.figure import Figure
+import matplotlib
 
-from .. import config
-from ..schema import SimilarityMatrix
+matplotlib.use("Agg")  # headless: the UI never needs an interactive backend
+
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import seaborn as sns  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
+
+from .. import config  # noqa: E402
+from ..schema import SimilarityMatrix  # noqa: E402
+
+#: Above this many actors the per-cell numbers stop being legible.
+ANNOTATION_LIMIT = 20
 
 
 def similarity_heatmap(
@@ -22,7 +32,7 @@ def similarity_heatmap(
     actor_names: dict[str, str],
     order: list[int] | None = None,
     *,
-    annotate: bool = False,
+    annotate: bool | None = None,
     cmap: str = config.HEATMAP_COLORMAP,
 ) -> Figure:
     """Render the actor-vs-actor similarity matrix.
@@ -33,18 +43,46 @@ def similarity_heatmap(
         order: Row/column display order from
             :func:`ttp_similarity.engine.clustering.order_for_heatmap`. Without
             it the plot is in id order and shows no structure.
-        annotate: Print the value inside each cell. Only legible up to ~20
-            actors, so the caller decides.
+        annotate: Print the value inside each cell. ``None`` decides from the
+            matrix size -- annotations stop being readable past ~20 actors.
         cmap: Colormap name.
 
     Returns:
         A matplotlib :class:`~matplotlib.figure.Figure`.
     """
-    # TODO(app): reorder matrix and labels by `order`; seaborn.heatmap with
-    #   vmin=0, vmax=1, square=True; rotate the x tick labels; tight_layout.
-    # TODO(app): with the real ATT&CK build this is ~150x150 -- switch to no
-    #   annotations and a larger figsize above ~30 actors.
-    raise NotImplementedError("similarity_heatmap")
+    labels = [actor_names.get(a, a) for a in similarity.actor_ids]
+    matrix = similarity.matrix
+
+    if order:
+        matrix = matrix[np.ix_(order, order)]
+        labels = [labels[i] for i in order]
+
+    count = len(labels)
+    if annotate is None:
+        annotate = count <= ANNOTATION_LIMIT
+
+    side = max(4.0, min(0.42 * count + 2.0, 22.0))
+    figure, axes = plt.subplots(figsize=(side, side * 0.85))
+    sns.heatmap(
+        matrix,
+        xticklabels=labels,
+        yticklabels=labels,
+        vmin=0.0,
+        vmax=1.0,
+        cmap=cmap,
+        square=True,
+        annot=annotate,
+        fmt=".2f",
+        annot_kws={"size": 7},
+        linewidths=0.3 if count <= 40 else 0.0,
+        cbar_kws={"label": "benzerlik", "shrink": 0.6},
+        ax=axes,
+    )
+    axes.set_xticklabels(axes.get_xticklabels(), rotation=90, fontsize=8)
+    axes.set_yticklabels(axes.get_yticklabels(), rotation=0, fontsize=8)
+    axes.set_title(f"Aktör benzerlik matrisi ({count} aktör, {similarity.metric})")
+    figure.tight_layout()
+    return figure
 
 
 def technique_frequency_plot(frequency: pd.DataFrame, top_n: int = 25) -> Figure:
@@ -60,9 +98,17 @@ def technique_frequency_plot(frequency: pd.DataFrame, top_n: int = 25) -> Figure
     Returns:
         A matplotlib figure.
     """
-    # TODO(app): frequency.head(top_n), horizontal barh with
-    #   "T1059 Command and Scripting Interpreter" style labels.
-    raise NotImplementedError("technique_frequency_plot")
+    head = frequency.nlargest(top_n, "actor_count").iloc[::-1]
+    labels = [
+        f"{row.technique_id}  {str(row.technique_name)[:38]}" for row in head.itertuples()
+    ]
+    figure, axes = plt.subplots(figsize=(9, max(3.0, 0.32 * len(head))))
+    axes.barh(labels, head["actor_count"], color="#4c72b0")
+    axes.set_xlabel("kaç aktörde geçiyor")
+    axes.set_title(f"En yaygın {len(head)} teknik")
+    axes.tick_params(axis="y", labelsize=8)
+    figure.tight_layout()
+    return figure
 
 
 def weight_distribution_plot(weights: pd.DataFrame) -> Figure:
@@ -77,8 +123,21 @@ def weight_distribution_plot(weights: pd.DataFrame) -> Figure:
     Returns:
         A matplotlib figure.
     """
-    # TODO(app): histogram of the weight column, with the median marked.
-    raise NotImplementedError("weight_distribution_plot")
+    values = weights["weight"].astype(float)
+    figure, axes = plt.subplots(figsize=(8, 4))
+    axes.hist(values, bins=30, color="#4c72b0", edgecolor="white")
+    axes.axvline(
+        values.median(),
+        color="#c44e52",
+        linestyle="--",
+        label=f"medyan {values.median():.2f}",
+    )
+    axes.set_xlabel("teknik ağırlığı")
+    axes.set_ylabel("teknik sayısı")
+    axes.set_title("Ağırlık dağılımı")
+    axes.legend()
+    figure.tight_layout()
+    return figure
 
 
 def evaluation_curve(by_sample_size: dict) -> Figure:
@@ -93,8 +152,21 @@ def evaluation_curve(by_sample_size: dict) -> Figure:
     Returns:
         A matplotlib figure.
     """
-    # TODO(app): two lines over the sorted sample sizes, y limited to [0, 1].
-    raise NotImplementedError("evaluation_curve")
+    sizes = sorted(int(k) for k in by_sample_size)
+    top1 = [by_sample_size[k]["top1"] for k in sizes]
+    top3 = [by_sample_size[k]["top3"] for k in sizes]
+
+    figure, axes = plt.subplots(figsize=(7, 4))
+    axes.plot(sizes, top1, marker="o", label="top-1")
+    axes.plot(sizes, top3, marker="s", label="top-3")
+    axes.set_ylim(0.0, 1.02)
+    axes.set_xlabel("sorgudaki teknik sayısı")
+    axes.set_ylabel("doğruluk")
+    axes.set_title("Sorgu boyutuna göre başarım")
+    axes.grid(alpha=0.3)
+    axes.legend()
+    figure.tight_layout()
+    return figure
 
 
 def save_figure(figure: Figure, path: Path, dpi: int = 150) -> Path:

@@ -51,6 +51,69 @@ def mean_reciprocal_rank(trials: Sequence[EvaluationTrial]) -> float:
     return sum(1.0 / trial.rank if trial.rank >= 1 else 0.0 for trial in trials) / len(trials)
 
 
+def mean_rank_of_correct_answer(trials: Sequence[EvaluationTrial]) -> tuple[float, int]:
+    """Average 1-based rank of the true actor, over the trials that found it.
+
+    Misses (``rank == -1``) are excluded and returned separately rather than
+    folded in with a sentinel: averaging "-1" or "top_k + 1" would invent a
+    number that depends on ``top_k`` rather than on the engine.
+
+    Args:
+        trials: Executed trials.
+
+    Returns:
+        ``(mean_rank, miss_count)``; ``mean_rank`` is ``0.0`` when nothing hit.
+    """
+    hits = [t.rank for t in trials if t.rank >= 1]
+    misses = len(trials) - len(hits)
+    return (sum(hits) / len(hits) if hits else 0.0, misses)
+
+
+#: Technique-count buckets for the size-vs-accuracy split. Chosen around the
+#: real distribution (min 5, median 21, max 87).
+TECHNIQUE_COUNT_BUCKETS: tuple[tuple[str, int, int], ...] = (
+    ("05-10", 5, 10),
+    ("11-20", 11, 20),
+    ("21-35", 21, 35),
+    ("36-50", 36, 50),
+    ("51+", 51, 10_000),
+)
+
+
+def breakdown_by_technique_count(
+    trials: Sequence[EvaluationTrial],
+) -> dict[str, dict[str, float]]:
+    """Accuracy split by how well documented the target actor is.
+
+    The counterpart, on the accuracy side, of the score-level size bias: if
+    well-documented actors are also easier to retrieve, the headline number is
+    partly measuring reporting depth rather than behavioural distinctiveness.
+
+    Args:
+        trials: Executed trials.
+
+    Returns:
+        ``{bucket: {"top1": ..., "top3": ..., "mrr": ..., "n": ..., "actors": ...}}``.
+    """
+    grouped: dict[str, list[EvaluationTrial]] = {name: [] for name, _, _ in TECHNIQUE_COUNT_BUCKETS}
+    for trial in trials:
+        for name, low, high in TECHNIQUE_COUNT_BUCKETS:
+            if low <= trial.technique_count <= high:
+                grouped[name].append(trial)
+                break
+    return {
+        name: {
+            "top1": top_k_accuracy(group, 1),
+            "top3": top_k_accuracy(group, 3),
+            "mrr": mean_reciprocal_rank(group),
+            "n": float(len(group)),
+            "actors": float(len({t.true_actor_id for t in group})),
+        }
+        for name, group in grouped.items()
+        if group
+    }
+
+
 def breakdown_by_sample_size(
     trials: Sequence[EvaluationTrial],
 ) -> dict[int, dict[str, float]]:

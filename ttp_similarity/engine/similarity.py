@@ -11,8 +11,10 @@ Owner: engine module. Output feeds the app's heatmap and the clustering step.
 from __future__ import annotations
 
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
 
 from .. import config
+from . import vectorize
 from ..schema import ActorId, SimilarityMatrix, VectorSpace
 
 
@@ -26,10 +28,10 @@ def cosine_similarity_matrix(space: VectorSpace) -> np.ndarray:
         Symmetric ``(n_actors, n_actors)`` array in ``[0, 1]`` with 1.0 on the
         diagonal.
     """
-    # TODO(engine): sklearn.metrics.pairwise.cosine_similarity(space.matrix);
-    #   clip to [0, 1] (float error can produce 1.0000000002) and force the
-    #   diagonal to exactly 1.0 so the heatmap does not show artefacts.
-    raise NotImplementedError("cosine_similarity_matrix")
+    sim = sklearn_cosine(space.matrix)
+    np.clip(sim, 0.0, 1.0, out=sim)
+    np.fill_diagonal(sim, 1.0)
+    return sim
 
 
 def jaccard_similarity_matrix(space: VectorSpace) -> np.ndarray:
@@ -41,15 +43,17 @@ def jaccard_similarity_matrix(space: VectorSpace) -> np.ndarray:
     Returns:
         Symmetric ``(n_actors, n_actors)`` array in ``[0, 1]``.
     """
-    # TODO(engine): binary = vectorize.to_binary(space);
-    #   intersection = binary @ binary.T;
-    #   union = counts[:, None] + counts[None, :] - intersection;
-    #   divide with np.errstate to keep 0/0 at 0.
-    raise NotImplementedError("jaccard_similarity_matrix")
+    binary = vectorize.to_binary(space)
+    intersection = binary @ binary.T
+    counts = binary.sum(axis=1)
+    union = counts[:, None] + counts[None, :] - intersection
+    with np.errstate(divide='ignore', invalid='ignore'):
+        jac = np.where(union > 0, intersection / union, 0.0)
+    return jac
 
 
 def compute_similarity(
-    space: VectorSpace, metric: str = config.SIMILARITY_METRIC
+    space: VectorSpace, metric: str | None = None
 ) -> SimilarityMatrix:
     """Compute the actor similarity matrix under the configured metric.
 
@@ -63,8 +67,14 @@ def compute_similarity(
     Raises:
         ValueError: On an unknown metric.
     """
-    # TODO(engine): dispatch, wrap with space.actor_ids and the metric name.
-    raise NotImplementedError("compute_similarity")
+    metric = config.SIMILARITY_METRIC if metric is None else metric
+    if metric == 'cosine':
+        matrix = cosine_similarity_matrix(space)
+    elif metric == 'jaccard':
+        matrix = jaccard_similarity_matrix(space)
+    else:
+        raise ValueError(f'Unknown similarity metric: {metric}')
+    return SimilarityMatrix(actor_ids=space.actor_ids, matrix=matrix, metric=metric)
 
 
 def nearest_actors(
@@ -86,8 +96,16 @@ def nearest_actors(
     Raises:
         KeyError: If ``actor_id`` is not in the matrix.
     """
-    # TODO(engine): locate the row, mask the diagonal, np.argsort descending.
-    raise NotImplementedError("nearest_actors")
+    idx = {aid: i for i, aid in enumerate(similarity.actor_ids)}
+    if actor_id not in idx:
+        raise KeyError(f'Actor {actor_id} not in similarity matrix')
+    self_index = idx[actor_id]
+    row = similarity.matrix[self_index]
+    # Drop self from the candidate list rather than masking its score: masking
+    # only works while top_k < n_actors, and would otherwise return the actor
+    # as its own nearest neighbour with a sentinel score.
+    order = [j for j in np.argsort(row)[::-1] if j != self_index][:top_k]
+    return [(similarity.actor_ids[j], float(row[j])) for j in order]
 
 
 def similarity_stats(similarity: SimilarityMatrix) -> dict[str, float]:
@@ -102,5 +120,12 @@ def similarity_stats(similarity: SimilarityMatrix) -> dict[str, float]:
     Returns:
         ``{"mean": ..., "median": ..., "p90": ..., "max": ...}``.
     """
-    # TODO(engine): take the upper triangle with np.triu_indices(n, k=1).
-    raise NotImplementedError("similarity_stats")
+    n = len(similarity.actor_ids)
+    indices = np.triu_indices(n, k=1)
+    values = similarity.matrix[indices]
+    return {
+        'mean': float(np.mean(values)),
+        'median': float(np.median(values)),
+        'p90': float(np.percentile(values, 90)),
+        'max': float(np.max(values))
+    }

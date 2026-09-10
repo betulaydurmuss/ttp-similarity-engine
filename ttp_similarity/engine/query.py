@@ -23,13 +23,19 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Sequence
+import re
+from typing import Mapping, Sequence
 
 import numpy as np
 
 from .. import config, paths, storage
+from ..data.normalize import normalize_technique_ids
+from . import confidence as confidence_mod
+from . import loading, vectorize
 from ..schema import (
     Candidate,
+    ConfidenceBreakdown,
+    ConfidenceLevel,
     EngineArtifacts,
     QueryResult,
     TechniqueContribution,
@@ -51,33 +57,111 @@ def normalize_query_input(raw: str | Sequence[str]) -> tuple[TechniqueId, ...]:
     Returns:
         Sorted unique parent-level technique ids (sub-techniques rolled up).
     """
-    # TODO(engine): re.split(r"[\s,;]+", ...) when given a string; then
-    #   normalize.normalize_technique_ids(). Keep entries that do not look like
-    #   technique ids so they can be reported as unknown.
-    raise NotImplementedError("normalize_query_input")
+    if isinstance(raw, str):
+        tokens = re.split(r"[\s,;]+", raw.strip())
+    else:
+        tokens = list(raw)
+    # Keep entries that don't look like technique ids so they can be reported
+    # as unknown -- normalize_technique_ids upper-cases and de-duplicates.
+    tokens = [t for t in tokens if t.strip()]
+    return normalize_technique_ids(tokens)
 
 
-def score_actors(query_vector: np.ndarray, space: VectorSpace) -> np.ndarray:
-    """Score every actor against the query vector.
+def score_actors(
+    query_vector: np.ndarray,
+    space: VectorSpace,
+    *,
+    query_technique_ids: Sequence[TechniqueId] = (),
+    metric: str | None = None,
+    weights: Mapping[TechniqueId, float] | None = None,
+) -> np.ndarray:
+    """Score every actor against the query.
 
-    With L2-normalised rows and query, the dot product *is* cosine similarity.
+    ``cosine`` (default): with L2-normalised rows and query, the dot product
+    *is* cosine similarity, so weights drive the ranking.
+
+    ``jaccard``: set overlap between the query and the actor's technique set,
+    ignoring weights entirely. This is the unweighted control the ablation
+    needs -- it answers "what would this system score without any weighting?".
+
+    ``weighted_jaccard`` (Ruzicka): the same set overlap, but every technique
+    counts for its IDF weight instead of 1. Combines Jaccard's structural
+    robustness to noise -- an injected technique enlarges the union for *every*
+    candidate equally, so it cannot reorder them -- with IDF's discrimination.
+    Since a technique carries the same global weight wherever it appears,
+    ``min``/``max`` over the two weight vectors reduce to a weighted
+    intersection over a weighted union.
 
     Args:
-        query_vector: Shape ``(n_techniques,)``.
+        query_vector: Shape ``(n_techniques,)``. Used by the cosine path.
         space: The dataset vector space.
+        query_technique_ids: The known query ids. Required by the jaccard path,
+            which works on sets rather than on the weighted vector.
+        metric: ``"cosine"``, ``"jaccard"`` or ``"weighted_jaccard"``; ``None``
+            reads config at call time.
+        weights: ``technique_id -> weight``; required by ``weighted_jaccard``.
 
     Returns:
         Shape ``(n_actors,)`` array of scores in ``[0, 1]``.
+
+    Raises:
+        ValueError: On an unknown metric.
     """
-    # TODO(engine): space.matrix @ query_vector, clipped to [0, 1].
-    raise NotImplementedError("score_actors")
+    metric = config.SIMILARITY_METRIC if metric is None else metric
+    if metric == "cosine":
+        return np.clip(space.matrix @ query_vector, 0.0, 1.0)
+    if metric in ("jaccard", "weighted_jaccard"):
+        binary = (space.matrix > 0).astype(float)
+        index = space.technique_index()
+        indicator = np.zeros(space.n_techniques, dtype=float)
+        for tid in query_technique_ids:
+            position = index.get(tid)
+            if position is not None:
+                indicator[position] = 1.0
+
+        if metric == "weighted_jaccard":
+            if weights is None:
+                raise ValueError("weighted_jaccard needs the technique weights")
+            per_technique = np.array(
+                [float(weights.get(tid, 0.0)) for tid in space.technique_ids]
+            )
+        else:
+            per_technique = np.ones(space.n_techniques, dtype=float)
+
+        intersection = binary @ (indicator * per_technique)
+        actor_total = binary @ per_technique
+        query_total = float(indicator @ per_technique)
+        union = actor_total + query_total - intersection
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(union > 0, intersection / union, 0.0)
+    raise ValueError(f"Unknown query metric: {metric}")
+
+
+def coverage_of(
+    query_technique_ids: Sequence[TechniqueId], space: VectorSpace
+) -> np.ndarray:
+    """Share of the query each actor actually covers, in ``[0, 1]``.
+
+    ``matched / len(query)`` per actor. Used by the optional coverage
+    correction; see :data:`ttp_similarity.config.COVERAGE_CORRECTION`.
+    """
+    if not query_technique_ids:
+        return np.zeros(space.n_actors, dtype=float)
+    binary = (space.matrix > 0).astype(float)
+    index = space.technique_index()
+    indicator = np.zeros(space.n_techniques, dtype=float)
+    for tid in query_technique_ids:
+        position = index.get(tid)
+        if position is not None:
+            indicator[position] = 1.0
+    return (binary @ indicator) / len(query_technique_ids)
 
 
 def explain_candidate(
     actor_index: int,
     query_technique_ids: Sequence[TechniqueId],
     artifacts: EngineArtifacts,
-    max_evidence: int = config.MAX_EVIDENCE_TECHNIQUES,
+    max_evidence: int | None = None,
 ) -> tuple[tuple[TechniqueId, ...], tuple[TechniqueId, ...], tuple[TechniqueContribution, ...]]:
     """Work out which techniques drove one candidate's score.
 
@@ -93,18 +177,52 @@ def explain_candidate(
         the matched techniques ranked by their share of the score, capped at
         ``max_evidence``. Contributions across all matched techniques sum to 1.
     """
-    # TODO(engine): intersect the query with the actor's non-zero columns;
-    #   contribution(t) = weight(t) / sum(weight(matched)).
-    # TODO(engine): missing_ids is what makes the result auditable -- "this
-    #   actor matches 6 of your 9 techniques" is the sentence the UI needs.
-    raise NotImplementedError("explain_candidate")
+    max_evidence = config.MAX_EVIDENCE_TECHNIQUES if max_evidence is None else max_evidence
+    space = artifacts.space
+    tech_idx = space.technique_index()
+    actor_row = space.matrix[actor_index]
+    query_set = set(query_technique_ids)
+
+    matched: list[TechniqueId] = []
+    missing: list[TechniqueId] = []
+    for tid in query_technique_ids:
+        j = tech_idx.get(tid)
+        if j is not None and actor_row[j] > 0:
+            matched.append(tid)
+        else:
+            missing.append(tid)
+
+    # Build evidence: how much each matched technique contributed
+    evidence: list[TechniqueContribution] = []
+    if matched:
+        matched_weights = {tid: artifacts.weights.get(tid, 0.0) for tid in matched}
+        total_weight = sum(matched_weights.values())
+        if total_weight <= 0:
+            total_weight = 1.0  # avoid division by zero
+
+        for tid in matched:
+            w = matched_weights[tid]
+            evidence.append(TechniqueContribution(
+                technique_id=tid,
+                technique_name=artifacts.technique_names.get(tid, tid),
+                weight=w,
+                contribution=w / total_weight,
+            ))
+        # Sort by contribution descending, cap at max_evidence
+        evidence.sort(key=lambda e: e.contribution, reverse=True)
+        evidence = evidence[:max_evidence]
+
+    return tuple(matched), tuple(missing), tuple(evidence)
 
 
 def rank_candidates(
     query_technique_ids: Sequence[TechniqueId],
     artifacts: EngineArtifacts,
-    top_k: int = config.QUERY_TOP_K,
-    min_score: float = config.MIN_CANDIDATE_SCORE,
+    top_k: int | None = None,
+    min_score: float | None = None,
+    *,
+    metric: str | None = None,
+    coverage_correction: bool | None = None,
 ) -> tuple[Candidate, ...]:
     """Rank actors against a set of known technique ids.
 
@@ -117,11 +235,65 @@ def rank_candidates(
     Returns:
         Candidates ordered best first, each with its evidence filled in.
     """
-    # TODO(engine): vectorize_query -> score_actors -> np.argsort descending ->
-    #   build Candidate objects via explain_candidate().
-    # TODO(engine): ties -- break deterministically on actor_id so the
-    #   evaluation benchmark is reproducible.
-    raise NotImplementedError("rank_candidates")
+    top_k = config.QUERY_TOP_K if top_k is None else top_k
+    min_score = config.MIN_CANDIDATE_SCORE if min_score is None else min_score
+    metric = config.SIMILARITY_METRIC if metric is None else metric
+    if coverage_correction is None:
+        coverage_correction = config.COVERAGE_CORRECTION
+
+    query_vector, known_ids, unknown_ids = vectorize.vectorize_query(
+        query_technique_ids, artifacts.space, artifacts.weights,
+    )
+
+    # All-zero vector means nothing matched
+    if metric == "cosine" and np.all(query_vector == 0):
+        return ()
+
+    scores = score_actors(
+        query_vector,
+        artifacts.space,
+        query_technique_ids=known_ids,
+        metric=metric,
+        weights=artifacts.weights,
+    )
+    if coverage_correction:
+        # Penalise an actor that scores highly on a couple of heavy matches
+        # while ignoring most of the query.
+        exponent = config.COVERAGE_CORRECTION_EXPONENT
+        scores = scores * (coverage_of(known_ids, artifacts.space) ** exponent)
+
+    # Argsort descending; break ties deterministically on actor_id
+    order = sorted(
+        range(len(scores)),
+        key=lambda i: (-scores[i], artifacts.space.actor_ids[i]),
+    )
+
+    names = {a.actor_id: a.name for a in artifacts.actors}
+    candidates: list[Candidate] = []
+    for actor_idx in order:
+        score = float(scores[actor_idx])
+        if score < min_score:
+            break
+        if len(candidates) >= top_k:
+            break
+
+        matched_ids, missing_ids, evidence = explain_candidate(
+            actor_idx, list(known_ids), artifacts,
+        )
+        actor_id = artifacts.space.actor_ids[actor_idx]
+        actor_name = names.get(actor_id, actor_id)
+
+        candidates.append(Candidate(
+            rank=len(candidates) + 1,
+            actor_id=actor_id,
+            actor_name=actor_name,
+            score=score,
+            matched_technique_ids=matched_ids,
+            missing_technique_ids=missing_ids,
+            evidence=evidence,
+        ))
+
+    return tuple(candidates)
 
 
 def query_techniques(
@@ -129,7 +301,9 @@ def query_techniques(
     artifacts: EngineArtifacts | None = None,
     *,
     dataset: str = paths.DEFAULT_DATASET,
-    top_k: int = config.QUERY_TOP_K,
+    top_k: int | None = None,
+    metric: str | None = None,
+    coverage_correction: bool | None = None,
 ) -> QueryResult:
     """Full query path: raw input in, ranked and explained candidates out.
 
@@ -151,19 +325,64 @@ def query_techniques(
         ttp_similarity.storage.ArtifactMissingError: If the engine has not been
             built for ``dataset``.
     """
-    # TODO(engine): normalize_query_input -> vectorize_query (known/unknown
-    #   split) -> rank_candidates -> confidence.score_confidence -> assemble.
-    # TODO(engine): an empty known set must return an empty candidate tuple with
-    #   LOW confidence, not raise -- the UI shows "sorgu bos" rather than a
-    #   traceback.
-    raise NotImplementedError("query_techniques")
+    # Normalise input
+    technique_ids_clean = normalize_query_input(technique_ids)
+
+    # Load engine artifacts if not provided
+    if artifacts is None:
+        artifacts = loading.load_engine(dataset, with_similarity=False)
+
+    # Split into known / unknown
+    tech_idx = artifacts.space.technique_index()
+    known_ids = tuple(tid for tid in technique_ids_clean if tid in tech_idx)
+    unknown_ids = tuple(tid for tid in technique_ids_clean if tid not in tech_idx)
+
+    # An empty known set -> empty result with LOW confidence
+    if not known_ids:
+        return QueryResult(
+            query_technique_ids=technique_ids_clean,
+            unknown_technique_ids=unknown_ids,
+            candidates=(),
+            confidence=ConfidenceBreakdown(
+                rarity=0.0, margin=0.0, sufficiency=0.0,
+                score=0.0, level=config.ConfidenceLevel.LOW if hasattr(config, 'ConfidenceLevel') else __import__('ttp_similarity.schema', fromlist=['ConfidenceLevel']).ConfidenceLevel.LOW,
+            ),
+            dataset=artifacts.dataset,
+            disclaimer=config.DISCLAIMER,
+        )
+
+    # Rank candidates
+    candidates = rank_candidates(
+        known_ids,
+        artifacts,
+        top_k=top_k,
+        metric=metric,
+        coverage_correction=coverage_correction,
+    )
+
+    # Compute confidence
+    conf = confidence_mod.score_confidence(candidates, known_ids, artifacts.weights)
+
+    return QueryResult(
+        query_technique_ids=technique_ids_clean,
+        unknown_technique_ids=unknown_ids,
+        candidates=candidates,
+        confidence=conf,
+        dataset=artifacts.dataset,
+        disclaimer=config.DISCLAIMER,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point: ``python -m ttp_similarity.engine.query T1566 T1059 ...``."""
     parser = argparse.ArgumentParser(description="Query a TTP set against a dataset.")
     parser.add_argument("techniques", nargs="+", help="technique ids, e.g. T1566 T1059")
-    parser.add_argument("--dataset", default=paths.DEFAULT_DATASET)
+    parser.add_argument(
+        "--dataset",
+        default=paths.DEFAULT_DATASET,
+        choices=list(paths.KNOWN_DATASETS),
+        help="which dataset to work on",
+    )
     parser.add_argument("--top-k", type=int, default=config.QUERY_TOP_K)
     parser.add_argument("--json", action="store_true", help="print the raw result as JSON")
     args = parser.parse_args(argv)

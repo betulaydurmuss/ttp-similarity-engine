@@ -30,15 +30,19 @@ Owner: engine module.
 
 from __future__ import annotations
 
+import math
 from typing import Mapping
 
+import numpy as np
 import pandas as pd
 
 from .. import config
 from ..schema import TechniqueId
 
 
-def idf(document_frequency: int, n_documents: int, smoothing: float = config.IDF_SMOOTHING) -> float:
+def idf(
+    document_frequency: int, n_documents: int, smoothing: float | None = None
+) -> float:
     """Smoothed inverse document frequency for a single technique.
 
     Args:
@@ -52,15 +56,18 @@ def idf(document_frequency: int, n_documents: int, smoothing: float = config.IDF
     Raises:
         ValueError: If ``n_documents <= 0`` or ``document_frequency < 0``.
     """
-    # TODO(engine): implement; keep it a standalone pure function so the unit
-    #   test can assert the monotonicity property (rarer -> strictly heavier).
-    raise NotImplementedError("idf")
+    smoothing = config.IDF_SMOOTHING if smoothing is None else smoothing
+    if n_documents <= 0:
+        raise ValueError(f"n_documents must be > 0, got {n_documents}")
+    if document_frequency < 0:
+        raise ValueError(f"document_frequency must be >= 0, got {document_frequency}")
+    return math.log((n_documents + smoothing) / (document_frequency + smoothing)) + 1
 
 
 def compute_weights(
     frequency: pd.DataFrame,
     n_actors: int,
-    scheme: str = config.WEIGHTING_SCHEME,
+    scheme: str | None = None,
 ) -> pd.DataFrame:
     """Turn the frequency table into per-technique weights.
 
@@ -77,10 +84,29 @@ def compute_weights(
     Raises:
         ValueError: On an unknown scheme or an empty frequency table.
     """
-    # TODO(engine): dispatch on scheme; vectorise with numpy over the
-    #   actor_count column; keep technique_name so weights.csv is inspectable
-    #   without a join.
-    raise NotImplementedError("compute_weights")
+    scheme = config.WEIGHTING_SCHEME if scheme is None else scheme
+    if frequency.empty:
+        raise ValueError("empty frequency table")
+        
+    actor_counts = frequency["actor_count"].values
+    
+    if scheme == "smooth_idf":
+        smoothing = config.IDF_SMOOTHING
+        w = np.log((n_actors + smoothing) / (actor_counts + smoothing)) + 1
+    elif scheme == "plain_idf":
+        w = np.where(actor_counts > 0, np.log(n_actors / actor_counts), 0.0)
+    elif scheme == "binary":
+        w = np.ones(len(actor_counts), dtype=float)
+    else:
+        raise ValueError(f"unknown scheme: {scheme}")
+
+    df = pd.DataFrame({
+        "technique_id": frequency["technique_id"],
+        "technique_name": frequency["technique_name"],
+        "actor_count": frequency["actor_count"],
+        "weight": w
+    })
+    return df.sort_values("weight", ascending=False).reset_index(drop=True)
 
 
 def weights_to_mapping(weights: pd.DataFrame) -> dict[TechniqueId, float]:
@@ -105,6 +131,14 @@ def normalized_rarity(
     Returns:
         Value in ``[0, 1]``; ``0.0`` for an empty input.
     """
-    # TODO(engine): mean(w(t) for t in technique_ids) / max(weights.values());
-    #   unknown ids contribute the minimum weight, not zero-division.
-    raise NotImplementedError("normalized_rarity")
+    if not technique_ids or not weights:
+        return 0.0
+    
+    max_weight = max(weights.values())
+    if max_weight <= 0:
+        return 0.0
+        
+    min_weight = min(weights.values())
+    collected_weights = [weights.get(tid, min_weight) for tid in technique_ids]
+    
+    return (sum(collected_weights) / len(collected_weights)) / max_weight
