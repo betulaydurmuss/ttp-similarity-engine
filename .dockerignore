@@ -1,0 +1,41 @@
+# ─── Python cache ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ─── Sanal ortam (host'taki venv'i imaja kopyalama) ─────────────
+.venv/
+venv/
+env/
+
+# ─── Test / lint araclari ───────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ─── IDE / OS dosyalari ─────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ─── Docker dosyalari (kendinleri) ──────────────────────────────
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ─── Proje artefaktlari (volume olarak baglanir, imaja girilmez) ─
+data/
+outputs/
+
+# ─── Git ────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ─── Streamlit secrets ──────────────────────────────────────────
+.streamlit/secrets.toml
