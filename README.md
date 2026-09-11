@@ -139,9 +139,71 @@ python -V
 
 ### Notlar
 
-- Ek altyapı yoktur: veritabanı, Docker veya servis gerekmez. Tüm ara çıktılar diske dosya olarak yazılır.
+- Ek altyapı yoktur: veritabanı veya harici servis gerekmez. Tüm ara çıktılar diske dosya olarak yazılır. Docker isteğe bağlıdır — sanal ortam kurmak yerine tercih edilebilir (bkz. [Docker ile Çalıştırma](#docker-ile-çalıştırma-önerilen)).
 - `requirements.txt` içindeki sürümler `==` ile sabitlenmiştir ve **Python 3.11'e karşı çözülmüştür**. Daha yeni bir Python'da kurulu olan sürümleri buraya kopyalamayın: örneğin `numpy 2.5.x` ve `scipy 1.18.x` için Python 3.11 wheel'i yoktur.
 - Sanal ortam klasörü (`.venv/`) ve üretilen tüm veri dosyaları `.gitignore` içindedir; `.python-version` ise **bilerek versiyonlanır**.
+
+---
+
+## Docker ile Çalıştırma (Önerilen)
+
+Sanal ortam kurmaya gerek kalmadan Docker ile çalıştırabilirsiniz. Python 3.11 zorunluluğu imaj içinde karşılanır.
+
+### Gereksinimler
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS / Linux)
+
+### Hızlı Başlangıç
+
+```powershell
+# 1) İmajı inşa et ve Streamlit'i başlat
+docker compose up --build
+
+# Tarayıcıda aç: http://localhost:8501
+```
+
+Veri ve çıktı dosyaları `data/` ve `outputs/` klasörlerine yazılır — Docker container kaldırılsa bile kaybolmaz.
+
+### İlk Çalıştırma: Mock Veri Seti + Engine Build
+
+Streamlit'i açmadan önce veri setinin oluşturulması gerekir:
+
+```powershell
+# Mock veri seti oluştur + engine artefaktlarını derle
+docker compose --profile setup run --rm setup
+
+# Ardından arayüzü başlat
+docker compose up app
+```
+
+### Gerçek ATT&CK Verisi ile Çalıştırma
+
+```powershell
+# ATT&CK Enterprise STIX paketini indir ve işle (~54 MB, ilk seferinde)
+docker compose run --rm app python -m ttp_similarity.data.build --dataset attck
+
+# Engine artefaktlarını oluştur
+docker compose run --rm app python -m ttp_similarity.engine.build --dataset attck
+
+# Arayüzü başlat
+docker compose up app
+```
+
+### CLI Komutları (Container İçinde)
+
+```powershell
+# Sorgu çalıştır
+docker compose run --rm app python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
+
+# Başarım testi
+docker compose run --rm app python -m ttp_similarity.evaluation.benchmark --dataset mock
+
+# Kurulum doğrulama
+docker compose run --rm app python check_setup.py
+
+# pytest
+docker compose run --rm app pytest
+```
 
 ---
 
