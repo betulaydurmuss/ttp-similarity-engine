@@ -10,28 +10,28 @@ MITRE ATT&CK Enterprise verisini kullanarak tehdit aktörlerinin davranışsal p
 
 Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır. **Dört modülün tamamı çalışır durumdadır:** ATT&CK ingest, IDF ağırlıklandırma / benzerlik / kümeleme / sorgu, başarım testi ve Streamlit arayüzü. Tek eksik `clustering.cluster_profile()`.
 
-| Bileşen | Dosya | Durum |
-|---|---|---|
-| Ortak veri modeli | `ttp_similarity/schema.py` | ✅ Tamam |
-| Dosya yolları / workspace | `ttp_similarity/paths.py` | ✅ Tamam |
-| Ayarlar ve eşikler | `ttp_similarity/config.py` | ✅ Tamam |
-| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` | ✅ Tamam |
-| Python sürüm koruması | `ttp_similarity/pyversion.py` | ✅ Tamam |
-| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` | ✅ Tamam |
-| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` | ✅ Tamam |
-| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` | ✅ Tamam |
-| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` | ✅ Tamam |
-| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` | ✅ Tamam |
-| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` | ✅ Tamam |
-| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` | ✅ Tamam (`cluster_profile` hariç) |
-| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` | ✅ Tamam |
-| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` | ✅ Tamam |
-| Motor build pipeline | `ttp_similarity/engine/build.py` | ✅ Tamam |
-| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` | ✅ Tamam |
-| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | ✅ Tamam |
-| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | ✅ Tamam |
-| Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` | ✅ Tamam |
-| Streamlit arayüzü (3 sekme) | `ttp_similarity/app/{streamlit_app,views,plots}.py` | ✅ Tamam |
+| Bileşen | Dosya |
+|---|---|
+| Ortak veri modeli | `ttp_similarity/schema.py` |
+| Dosya yolları / workspace | `ttp_similarity/paths.py` |
+| Ayarlar ve eşikler | `ttp_similarity/config.py` |
+| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` |
+| Python sürüm koruması | `ttp_similarity/pyversion.py` |
+| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` |
+| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` |
+| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` |
+| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` |
+| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` |
+| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` |
+| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` (`cluster_profile` hariç) |
+| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` |
+| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` |
+| Motor build pipeline | `ttp_similarity/engine/build.py` |
+| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` |
+| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` |
+| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` |
+| Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` |
+| Streamlit arayüzü (3 sekme) | `ttp_similarity/app/{streamlit_app,views,plots}.py` |
 
 ---
 
