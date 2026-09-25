@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────
+# ttp-similarity-engine -- docker-compose.yml
+#
+# Kullanim:
+#   docker compose up --build            # ilk calistirma (imaj insa edilir)
+#   docker compose up                    # sonraki calistirmalar
+#   docker compose down                  # durdur ve container'i sil
+#
+# Servisler:
+#   app        : Streamlit arayuzu (http://localhost:8501)
+#   mock-build : Tek seferlik mock veri seti + engine build (profile: setup)
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Ana uygulama: Streamlit arayuzu ─────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    image: ttp-similarity-engine:latest
+    container_name: ttp-similarity-app
+    ports:
+      - "8501:8501"
+    volumes:
+      # data/ ve outputs/ host ile paylasilir; pipeline ciktilari kalici olur
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8501/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ── Kurulum servisi: mock veri seti + engine build ───────────────────────
+  # docker compose --profile setup run --rm setup
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    image: ttp-similarity-engine:latest
+    container_name: ttp-similarity-setup
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    profiles:
+      - setup
+    command: >
+      sh -c "
+        echo '==> Mock veri seti olusturuluyor...' &&
+        python -m ttp_similarity.data.mock_dataset &&
+        echo '==> Engine artefaktlari derleniyor (mock)...' &&
+        python -m ttp_similarity.engine.build --dataset mock &&
+        echo '==> Tamamlandi. Streamlit baslatabilirsiniz: docker compose up app'
+      "
