@@ -139,9 +139,71 @@ python -V
 
 ### Notlar
 
-- Ek altyapı yoktur: veritabanı, Docker veya servis gerekmez. Tüm ara çıktılar diske dosya olarak yazılır.
+- Ek altyapı yoktur: veritabanı veya harici servis gerekmez. Tüm ara çıktılar diske dosya olarak yazılır. Docker isteğe bağlıdır — sanal ortam kurmak yerine tercih edilebilir (bkz. [Docker ile Çalıştırma](#docker-ile-çalıştırma-önerilen)).
 - `requirements.txt` içindeki sürümler `==` ile sabitlenmiştir ve **Python 3.11'e karşı çözülmüştür**. Daha yeni bir Python'da kurulu olan sürümleri buraya kopyalamayın: örneğin `numpy 2.5.x` ve `scipy 1.18.x` için Python 3.11 wheel'i yoktur.
 - Sanal ortam klasörü (`.venv/`) ve üretilen tüm veri dosyaları `.gitignore` içindedir; `.python-version` ise **bilerek versiyonlanır**.
+
+---
+
+## Docker ile Çalıştırma (Önerilen)
+
+Sanal ortam kurmaya gerek kalmadan Docker ile çalıştırabilirsiniz. Python 3.11 zorunluluğu imaj içinde karşılanır.
+
+### Gereksinimler
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS / Linux)
+
+### Hızlı Başlangıç
+
+```powershell
+# 1) İmajı inşa et ve Streamlit'i başlat
+docker compose up --build
+
+# Tarayıcıda aç: http://localhost:8501
+```
+
+Veri ve çıktı dosyaları `data/` ve `outputs/` klasörlerine yazılır — Docker container kaldırılsa bile kaybolmaz.
+
+### İlk Çalıştırma: Mock Veri Seti + Engine Build
+
+Streamlit'i açmadan önce veri setinin oluşturulması gerekir:
+
+```powershell
+# Mock veri seti oluştur + engine artefaktlarını derle
+docker compose --profile setup run --rm setup
+
+# Ardından arayüzü başlat
+docker compose up app
+```
+
+### Gerçek ATT&CK Verisi ile Çalıştırma
+
+```powershell
+# ATT&CK Enterprise STIX paketini indir ve işle (~54 MB, ilk seferinde)
+docker compose run --rm app python -m ttp_similarity.data.build --dataset attck
+
+# Engine artefaktlarını oluştur
+docker compose run --rm app python -m ttp_similarity.engine.build --dataset attck
+
+# Arayüzü başlat
+docker compose up app
+```
+
+### CLI Komutları (Container İçinde)
+
+```powershell
+# Sorgu çalıştır
+docker compose run --rm app python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
+
+# Başarım testi
+docker compose run --rm app python -m ttp_similarity.evaluation.benchmark --dataset mock
+
+# Kurulum doğrulama
+docker compose run --rm app python check_setup.py
+
+# pytest
+docker compose run --rm app pytest
+```
 
 ---
 
@@ -169,8 +231,17 @@ python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
 # 3b) JSON çıktı ✅
 python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock --json
 
-# 4) Başarım testi (evaluation modülü tamamlandığında)
+# 4) Başarım testi ✅
 python -m ttp_similarity.evaluation.benchmark --dataset mock
+
+# 4b) Ağırlık şeması / metrik / eşik karşılaştırmaları ✅
+python -m ttp_similarity.evaluation.benchmark --dataset attck --compare
+
+# 4c) Üç zorluk rejimi: A referans, B seyrek sorgu, C gürültülü sorgu ✅
+python -m ttp_similarity.evaluation.benchmark --dataset attck --regimes
+
+# 4d) Tek aktör için vaka çalışması materyali ✅
+python -m ttp_similarity.evaluation.case_study --dataset attck --actor G0065
 
 # 5) Arayüz
 streamlit run ttp_similarity/app/streamlit_app.py
@@ -227,9 +298,15 @@ ttp-similarity-engine/
 │   └── reports/<veri-seti>/     # başarım raporları
 ├── tests/
 │   ├── test_contract.py         # modüller arası sözleşme testleri
+│   ├── test_data_pipeline.py    # aşama 1 boru hattı testleri
 │   ├── test_engine.py           # motor modülü birim testleri
+│   ├── test_engine_properties.py# motorun değişmezleri (property testleri)
+│   ├── test_evaluation.py       # örnekleme ve metrik testleri
 │   ├── test_mock_dataset.py     # sahte veri seti testleri
 │   └── test_python_pin.py       # Python sürüm sabiti testleri
+├── Dockerfile                   # Python 3.11 imajı
+├── docker-compose.yml           # `app` servisi + `setup` profili
+├── .dockerignore
 ├── check_setup.py               # tek komutla kurulum doğrulama
 ├── .python-version              # 3.11 (pyenv sürüm sabiti, versiyonlanır)
 ├── pyproject.toml               # requires-python = ">=3.11,<3.12"
@@ -360,7 +437,33 @@ Bilinen bir aktörün tekniklerinden rastgele `k` tanesi seçilir, sanki yeni bi
 - Sorgu boyutuna göre kırılım — "kaç teknik gerekiyor?" sorusunun cevabı
 - **Güven seviyesine göre kırılım** — kalibrasyon kontrolü: `yüksek` etiketli sonuçlar `düşük` etiketlilerden belirgin biçimde daha doğru olmalıdır, aksi halde güven skoru süstür.
 
-Çıktı: `outputs/reports/<veri-seti>/evaluation.json` ve `evaluation_trials.csv`.
+#### CLI bayrakları
+
+| Bayrak | Etkisi |
+|---|---|
+| `--dataset` | `mock` veya `attck` |
+| `--compare` | Üç karşılaştırmayı birden çalıştırır: ağırlık şeması, benzerlik metriği, kapsam düzeltmesi |
+| `--regimes` | Üç zorluk rejimini çalıştırır: **A** referans (aktörün tekniklerinin %50'si, gürültüsüz), **B** seyrek sorgu (%25, gürültüsüz), **C** gürültülü sorgu (%25 + yabancı teknik enjeksiyonu). Diğer tüm parametreler sabit tutulur, böylece fark yalnızca zorluktan gelir |
+| `--scheme` | `smooth_idf` / `plain_idf` / `binary` — tek koşu için `config` değerini ezer |
+| `--metric` | `cosine` / `jaccard` |
+| `--min-techniques` | Denemeye alınacak aktörler için asgari teknik sayısı |
+| `--coverage-correction` | Kapsam düzeltmesini açar |
+| `--fraction` / `--repeats` / `--seed` | Örnekleme oranı, aktör başına tekrar, tohum |
+
+#### Çıktılar (`outputs/reports/<veri-seti>/`)
+
+| Dosya | İçerik |
+|---|---|
+| `evaluation.json` | Toplu metrikler: top-1, top-3, MRR, kırılımlar |
+| `evaluation_trials.csv` | Her deneme tek satır — sorgu, doğru aktör, çıkan sıra, güven |
+| `benchmark_report.txt` | Aynı sonuçların okunabilir metin özeti |
+| `by_confidence.csv` | Güven seviyesine göre kırılım (kalibrasyon kontrolü) |
+| `by_technique_count.csv` | Sorgu boyutuna göre kırılım |
+| `comparison_summary.csv` + `trials_<koşul>.csv` | `--compare` çıktısı: şema / metrik / kapsam düzeltmesi karşılaştırması |
+| `confidence_threshold_sweep.csv` | Güven eşiklerinin taranması |
+| `regime_summary.csv`, `regime_report.txt`, `regime_significance.csv`, `regime_trials_*.csv` | `--regimes` çıktısı ve anlamlılık testleri |
+
+`case_study.py` ayrıca seçilen aktör için `case_<aktör-id>/` altına o aktöre ait figür ve tabloları yazar.
 
 > Not: Alt küme, motorun indekslediği aynı ATT&CK kayıtlarından çekilir. Bu nedenle ölçülen şey **erişim tutarlılığıdır**, gerçek dünya attribution doğruluğu değildir.
 
