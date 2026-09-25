@@ -1,13 +1,13 @@
-"""Screen renderers. Each takes the loaded artefacts and draws one tab.
+"""Screen renderers. Each takes the loaded artefacts and draws one section.
 
-Three screens, matching the agreed scope:
+Three screens, reached from the left rail rather than from tabs:
 
-* **Benzerlik ısı haritası** -- the actor-vs-actor matrix. 149 actors do not fit
-  on a screen, so the matrix is always a subset: either one actor plus its
-  nearest neighbours, or a hand-picked set.
+* **Isı haritası** -- the actor-vs-actor matrix. 149 actors do not fit on a
+  screen, so the matrix is always a subset: either one actor plus its nearest
+  neighbours, a hand-picked set, or the densest part of the space.
 * **TTP sorgu** -- paste technique ids, get ranked candidates, the confidence
-  badge with all three components, the evidence behind the top candidate and
-  the query techniques it does *not* cover.
+  badge with all three components, the evidence behind each candidate and the
+  query techniques it does *not* cover.
 * **Vaka çalışması** -- one actor's nearest neighbours with the mean weight of
   the techniques each pair shares. That column is the interpretation: a high
   score built on commodity overlap means something different from the same
@@ -17,7 +17,9 @@ The cluster-profile panel is deliberately absent -- ``cluster_profile()`` is not
 implemented.
 
 No scoring happens here. Everything comes from the engine, so the CLI and the UI
-cannot disagree. UI strings are Turkish; code and docstrings are English.
+cannot disagree. Presentation is likewise not here: every bordered strip, bar and
+table comes from :mod:`ttp_similarity.app.theme`, so a screen reads as a list of
+what it shows. UI strings are Turkish; code and docstrings are English.
 
 Owner: app module.
 """
@@ -27,21 +29,28 @@ from __future__ import annotations
 from typing import Callable, Sequence
 
 import numpy as np
-import pandas as pd
 import streamlit as st
 
 from .. import config, paths
 from ..engine import clustering
+from ..engine import confidence as confidence_mod
 from ..engine import query as query_mod
 from ..schema import Actor, EngineArtifacts, QueryResult, SimilarityMatrix
-from . import loaders, plots
+from . import loaders, plots, theme
 
-#: Badge colour per confidence level, for the query screen.
-CONFIDENCE_COLORS = {"high": "#1a7f37", "medium": "#b58105", "low": "#a40e26"}
-CONFIDENCE_LABELS_TR = {"high": "YÜKSEK", "medium": "ORTA", "low": "DÜŞÜK"}
+#: Rail entries: ``(key, label)``. The key is what
+#: :func:`render_nav` returns and what ``streamlit_app`` dispatches on.
+NAV_ITEMS: tuple[tuple[str, str], ...] = (
+    ("heatmap", "Isı haritası"),
+    ("query", "TTP sorgu"),
+    ("case", "Vaka çalışması"),
+)
 
-#: A component at or below this is called out as the weak one.
-WEAK_COMPONENT = 0.34
+#: Session-state key holding the active rail entry.
+NAV_KEY = "nav_section"
+
+#: Session-state key backing the query text area.
+QUERY_KEY = "query_text"
 
 #: Demo presets: APT40 (G0065) at both ends of its weight distribution. Loaded
 #: with one click so the contrast can be shown live without typing.
@@ -52,9 +61,6 @@ PRESET_APT40_COMMODITY = [
     "T1059", "T1204", "T1566", "T1027", "T1105", "T1078", "T1583", "T1021",
 ]
 
-#: Session-state key backing the query text area.
-QUERY_KEY = "query_text"
-
 
 def pending(function_name: str, note: str = "") -> None:
     """Placeholder shown where a renderer is not implemented yet.
@@ -63,7 +69,7 @@ def pending(function_name: str, note: str = "") -> None:
         function_name: Fully qualified name of the function to be written.
         note: Extra context for whoever picks it up.
     """
-    st.info(f"Henüz uygulanmadı: `{function_name}`" + (f"\n\n{note}" if note else ""))
+    theme.banner(note or "Bu bölüm henüz uygulanmadı.", "warn", code=function_name)
 
 
 def guard(render: Callable[[], None], function_name: str) -> None:
@@ -81,7 +87,7 @@ def guard(render: Callable[[], None], function_name: str) -> None:
 
 def render_disclaimer() -> None:
     """The non-attribution notice. Shown on every screen, not tucked in an About tab."""
-    st.warning(config.DISCLAIMER, icon=":material/info:")
+    theme.disclaimer(config.DISCLAIMER)
 
 
 # --------------------------------------------------------------------------- #
@@ -116,12 +122,12 @@ def _subset(similarity: SimilarityMatrix, actor_ids: Sequence[str]) -> Similarit
     )
 
 
-def _neighbours(
+def _neighbour_rows(
     actor: Actor, artifacts: EngineArtifacts, limit: int
-) -> pd.DataFrame:
+) -> list[list[object]]:
     """Nearest actors with the shared-technique diagnostics.
 
-    ``ortak ağırlık ort.`` is the interpretation column: two pairs can share the
+    The mean shared weight is the interpretation column: two pairs can share the
     same number of techniques and mean very different things depending on
     whether those techniques are rare or universal.
 
@@ -131,7 +137,7 @@ def _neighbours(
         limit: How many neighbours to return.
 
     Returns:
-        A display-ready DataFrame, best first.
+        Rows shaped for :func:`ttp_similarity.app.theme.table`, best first.
     """
     similarity = artifacts.similarity
     by_id = artifacts.actor_by_id()
@@ -141,31 +147,68 @@ def _neighbours(
     row = similarity.matrix[index[actor.actor_id]]
     order = [j for j in np.argsort(row)[::-1] if j != index[actor.actor_id]][:limit]
 
-    rows = []
+    rows: list[list[object]] = []
     for rank, position in enumerate(order, start=1):
         other = by_id[similarity.actor_ids[position]]
         shared = sorted(own & set(other.technique_ids))
         weights = [artifacts.weights.get(t, 0.0) for t in shared]
         rows.append(
-            {
-                "#": rank,
-                "aktör": other.name,
-                "id": other.actor_id,
-                "skor": round(float(row[position]), 4),
-                "teknik": len(other.technique_ids),
-                "ortak": len(shared),
-                "ortak ağırlık ort.": round(float(np.mean(weights)), 3) if shared else 0.0,
-                "ortak ağırlık maks.": round(float(np.max(weights)), 2) if shared else 0.0,
-            }
+            [
+                f"{rank:02d}",
+                other.name,
+                other.actor_id,
+                f"{float(row[position]):.4f}",
+                len(other.technique_ids),
+                len(shared),
+                f"{float(np.mean(weights)):.3f}" if shared else "0.000",
+                f"{float(np.max(weights)):.2f}" if shared else "0.00",
+            ]
         )
-    return pd.DataFrame(rows)
+    return rows
 
 
 # --------------------------------------------------------------------------- #
-# Sidebar
+# Left rail
 # --------------------------------------------------------------------------- #
+def render_nav() -> str:
+    """Draw the rail's navigation and return the active section key.
+
+    Buttons rather than ``st.radio``: a button's ``kind`` attribute is a stable
+    styling hook across Streamlit releases, whereas a radio group's internals
+    are not, and the active entry needs a genuinely different look (accent rule
+    on the left edge) rather than a dot.
+
+    Returns:
+        One of the keys in :data:`NAV_ITEMS`.
+    """
+    active = st.session_state.get(NAV_KEY, NAV_ITEMS[0][0])
+
+    st.sidebar.html(
+        '<div style="display:flex;align-items:baseline;gap:.5rem;'
+        'padding:0 .85rem .9rem;border-bottom:1px solid #1f2937;margin-bottom:.7rem">'
+        '<span style="color:#4fd1c5;font-size:.95rem;line-height:1">&#9670;</span>'
+        '<span style="font-size:.66rem;font-weight:700;letter-spacing:.14em;'
+        'text-transform:uppercase;color:#8b97a8">TTP Similarity</span></div>'
+    )
+
+    for key, label in NAV_ITEMS:
+        if st.sidebar.button(
+            label,
+            key=f"nav_{key}",
+            type="primary" if key == active else "secondary",
+            width="stretch",
+        ):
+            st.session_state[NAV_KEY] = key
+            st.rerun()
+    return active
+
+
 def render_sidebar(datasets: list[str]) -> str:
-    """Dataset selector plus build provenance.
+    """Dataset selector, build provenance and the effective scoring settings.
+
+    The scoring settings are in the rail on purpose: a similarity number means
+    nothing without the weighting scheme and metric that produced it, and the
+    CLI prints those too.
 
     Args:
         datasets: Dataset names with a build on disk.
@@ -173,31 +216,35 @@ def render_sidebar(datasets: list[str]) -> str:
     Returns:
         The selected dataset name.
     """
-    st.sidebar.header("Veri seti")
-    default = datasets.index(paths.DEFAULT_DATASET) if paths.DEFAULT_DATASET in datasets else 0
-    dataset = st.sidebar.selectbox("Seçin", datasets, index=default)
+    st.sidebar.html('<div class="ttp-rail-h">Veri seti</div>')
+    default = (
+        datasets.index(paths.DEFAULT_DATASET) if paths.DEFAULT_DATASET in datasets else 0
+    )
+    dataset = st.sidebar.selectbox(
+        "Seçin", datasets, index=default, label_visibility="collapsed"
+    )
 
     summary = loaders.get_manifest_summary(dataset)
     if summary:
-        st.sidebar.caption("Yapı bilgisi")
-        st.sidebar.table(pd.DataFrame({"değer": summary}))
+        with st.sidebar:
+            theme.key_values("Yapı bilgisi", summary)
 
-    st.sidebar.caption("Skorlama ayarları")
-    st.sidebar.table(
-        pd.DataFrame(
+    with st.sidebar:
+        theme.key_values(
+            "Skorlama",
             {
-                "değer": {
-                    "Ağırlıklandırma": config.WEIGHTING_SCHEME,
-                    "Metrik": config.SIMILARITY_METRIC,
-                    "Kapsam düzeltmesi": "açık" if config.COVERAGE_CORRECTION else "kapalı",
-                    "Güven eşikleri": f"{config.CONFIDENCE_HIGH_THRESHOLD} / "
-                    f"{config.CONFIDENCE_MEDIUM_THRESHOLD}",
-                }
-            }
+                "Ağırlık": config.WEIGHTING_SCHEME,
+                "Metrik": config.SIMILARITY_METRIC,
+                "Kapsam düzeltmesi": "açık" if config.COVERAGE_CORRECTION else "kapalı",
+                "Güven eşikleri": (
+                    f"{config.CONFIDENCE_HIGH_THRESHOLD:.2f} / "
+                    f"{config.CONFIDENCE_MEDIUM_THRESHOLD:.2f}"
+                ),
+            },
         )
-    )
 
-    if st.sidebar.button("Önbelleği temizle"):
+    st.sidebar.html("<div style='height:1.2rem'></div>")
+    if st.sidebar.button("Önbelleği temizle", key="clear_caches", width="stretch"):
         loaders.clear_caches()
         st.rerun()
     return dataset
@@ -209,18 +256,19 @@ def render_sidebar(datasets: list[str]) -> str:
 def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
     """Similarity heatmap screen.
 
-    The full matrix is unreadable at 149 actors, so a subset is always chosen:
-    either one actor plus its nearest neighbours, or a hand-picked set. Rows are
-    ordered by the clustering dendrogram, without which a heatmap shows nothing.
+    The full matrix is unreadable at 149 actors, so a subset is always chosen.
+    Rows are ordered by the clustering dendrogram, without which a heatmap shows
+    nothing.
 
     Args:
         artifacts: Loaded engine artefacts. ``artifacts.similarity`` is ``None``
             when the similarity stage has not run -- show a hint, do not crash.
     """
     if artifacts.similarity is None:
-        st.warning(
-            "Benzerlik matrisi bulunamadı. Çalıştırın: "
-            f"`python -m ttp_similarity.engine.build --dataset {artifacts.dataset}`"
+        theme.banner(
+            "Benzerlik matrisi bulunamadı.",
+            "warn",
+            code=f"python -m ttp_similarity.engine.build --dataset {artifacts.dataset}",
         )
         return
 
@@ -228,10 +276,20 @@ def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
     names = _actor_names(artifacts)
     total = len(artifacts.actors)
 
+    theme.section(
+        "01",
+        "Görünüm",
+        "Matris her zaman bir alt kümedir; 149 aktör tek ekranda okunmaz.",
+    )
     mode = st.radio(
         "Gösterilecek aktörler",
-        ["Bir aktör ve en yakın komşuları", "Aktörleri elle seç", "En yoğun benzerlik gösteren N aktör"],
+        [
+            "Bir aktör ve en yakın komşuları",
+            "Aktörleri elle seç",
+            "En yoğun benzerlik gösteren N aktör",
+        ],
         horizontal=True,
+        label_visibility="collapsed",
     )
 
     if mode == "Bir aktör ve en yakın komşuları":
@@ -254,7 +312,7 @@ def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
             format_func=lambda a: labels[a],
         )
         if len(selected) < 2:
-            st.info("En az iki aktör seçin.")
+            theme.banner("En az iki aktör seçin.", "info")
             return
 
     else:
@@ -268,40 +326,59 @@ def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
         selected = [artifacts.similarity.actor_ids[i] for i in top]
 
     subset = _subset(artifacts.similarity, selected)
+    values = subset.matrix[np.triu_indices(len(subset.actor_ids), k=1)]
+    if values.size:
+        theme.stats(
+            [
+                ("Seçili aktör", len(subset.actor_ids), f"/ {total}"),
+                ("Ortalama benzerlik", f"{values.mean():.3f}"),
+                ("Medyan", f"{np.median(values):.3f}"),
+                ("En yüksek çift", f"{values.max():.3f}"),
+                ("Metrik", subset.metric),
+            ]
+        )
+
+    theme.section("02", "Matris", "Satırlar kümeleme dendrogramına göre sıralanmıştır.")
     try:
         order = clustering.order_for_heatmap(subset)
     except Exception:  # noqa: BLE001 - ordering is a nicety, never fatal
         order = None
-
-    figure = plots.similarity_heatmap(subset, names, order)
+    figure = plots.similarity_heatmap(subset, names, order, dark=True)
     st.pyplot(figure, width="stretch")
 
-    values = subset.matrix[np.triu_indices(len(subset.actor_ids), k=1)]
-    if values.size:
-        left, middle, right = st.columns(3)
-        left.metric("Seçili aktör", len(subset.actor_ids))
-        middle.metric("Ortalama benzerlik", f"{values.mean():.3f}")
-        right.metric("En yüksek çift", f"{values.max():.3f}")
+    theme.section("03", "Bu görünümdeki en benzer çiftler")
+    theme.table(
+        columns=(
+            ("#", "ttp-rank"),
+            ("aktör a", "ttp-name"),
+            ("aktör b", "ttp-name"),
+            ("skor", "ttp-num"),
+        ),
+        rows=_top_pair_rows(subset, names),
+        grid="2.2rem 1fr 1fr 5rem",
+    )
 
-    with st.expander("Bu görünümdeki en benzer çiftler"):
-        st.dataframe(_top_pairs(subset, names), hide_index=True, width="stretch")
 
-
-def _top_pairs(similarity: SimilarityMatrix, names: dict[str, str], limit: int = 15):
+def _top_pair_rows(
+    similarity: SimilarityMatrix, names: dict[str, str], limit: int = 15
+) -> list[list[object]]:
     """The strongest pairs inside the displayed subset."""
     n = len(similarity.actor_ids)
-    rows = []
     upper = np.triu_indices(n, k=1)
-    for position in np.argsort(similarity.matrix[upper])[::-1][:limit]:
+    rows: list[list[object]] = []
+    for rank, position in enumerate(
+        np.argsort(similarity.matrix[upper])[::-1][:limit], start=1
+    ):
         i, j = upper[0][position], upper[1][position]
         rows.append(
-            {
-                "aktör A": names.get(similarity.actor_ids[i], similarity.actor_ids[i]),
-                "aktör B": names.get(similarity.actor_ids[j], similarity.actor_ids[j]),
-                "skor": round(float(similarity.matrix[i, j]), 4),
-            }
+            [
+                f"{rank:02d}",
+                names.get(similarity.actor_ids[i], similarity.actor_ids[i]),
+                names.get(similarity.actor_ids[j], similarity.actor_ids[j]),
+                f"{float(similarity.matrix[i, j]):.4f}",
+            ]
         )
-    return pd.DataFrame(rows)
+    return rows
 
 
 # --------------------------------------------------------------------------- #
@@ -326,63 +403,73 @@ def render_query_tab(artifacts: EngineArtifacts) -> None:
     Args:
         artifacts: Loaded engine artefacts.
     """
-    st.caption(
-        "Teknik kimliklerini boşluk, virgül veya satır sonuyla ayırarak yapıştırın. "
-        "Alt teknikler ana tekniğe indirgenir (T1059.001 → T1059)."
+    theme.section(
+        "01",
+        "Gözlemlenen teknikler",
+        "Boşluk, virgül veya satır sonuyla ayırın. Alt teknikler ana tekniğe "
+        "indirgenir (T1059.001 → T1059).",
     )
 
     left, right, _ = st.columns([2, 2, 3])
-    if left.button("APT40 — ayırt edici 8 teknik", width="stretch"):
+    if left.button("APT40 — ayırt edici 8", key="preset_rare", width="stretch"):
         _load_preset(PRESET_APT40_DISTINCTIVE)
-    if right.button("APT40 — emtia 8 teknik", width="stretch"):
+    if right.button("APT40 — emtia 8", key="preset_common", width="stretch"):
         _load_preset(PRESET_APT40_COMMODITY)
 
     raw = st.text_area(
         "Teknik listesi",
         key=QUERY_KEY,
-        height=110,
+        height=104,
         placeholder="T1566 T1078 T1047 T1003 ...",
+        label_visibility="collapsed",
     )
     top_k = st.slider("Kaç aday gösterilsin", 3, 25, config.QUERY_TOP_K)
 
     if not str(raw).strip():
-        st.info("Bir teknik listesi girin veya yukarıdaki hazır setlerden birini yükleyin.")
+        theme.banner(
+            "Bir teknik listesi girin veya yukarıdaki hazır setlerden birini yükleyin.",
+            "info",
+        )
         return
 
     result = query_mod.query_techniques(raw, artifacts, top_k=top_k)
+    scored = len(result.query_technique_ids) - len(result.unknown_technique_ids)
 
-    if result.unknown_technique_ids:
-        st.warning(
-            "Bu veri setinde bulunmayan teknikler (skorlamaya girmedi): "
-            + ", ".join(result.unknown_technique_ids)
-        )
-    if not result.candidates:
-        st.error("Skorlanabilir teknik kalmadı; sonuç üretilemedi.")
-        return
-
-    st.caption(
-        f"Skorlanan teknik: {len(result.query_technique_ids) - len(result.unknown_technique_ids)}"
-        f" / {len(result.query_technique_ids)}"
+    theme.stats(
+        [
+            ("Skorlanan teknik", scored, f"/ {len(result.query_technique_ids)}"),
+            ("Aday", len(result.candidates)),
+            ("Güven", theme.LEVEL_LABELS.get(result.confidence.level.value, "-")),
+            ("Veri seti", result.dataset),
+        ]
     )
 
+    if result.unknown_technique_ids:
+        theme.banner(
+            "Bu veri setinde bulunmayan teknikler skorlamaya girmedi:", "warn"
+        )
+        theme.chips(result.unknown_technique_ids, tone="warn")
+
+    if not result.candidates:
+        theme.banner("Skorlanabilir teknik kalmadı; sonuç üretilemedi.", "err")
+        return
+
+    theme.section(
+        "02",
+        "Güven değerlendirmesi",
+        "Tek bir benzerlik sayısı yanıltıcıdır: en iyi aday, sorgu üç yaygın "
+        "teknikten ibaret olsa bile vardır.",
+    )
     render_confidence(result)
-    st.subheader("Aday aktörler")
-    st.dataframe(
-        pd.DataFrame(
-            [
-                {
-                    "#": c.rank,
-                    "aktör": c.actor_name,
-                    "id": c.actor_id,
-                    "skor": round(c.score, 4),
-                    "eşleşen": len(c.matched_technique_ids),
-                    "eşleşmeyen": len(c.missing_technique_ids),
-                }
-                for c in result.candidates
-            ]
-        ),
-        hide_index=True,
-        width="stretch",
+
+    theme.section("03", "Aday aktörler", "Çubuklar en yüksek skora göre ölçeklenmiştir.")
+    theme.candidate_table(result.candidates, scored)
+
+    theme.section(
+        "04",
+        "Kanıt dökümü",
+        "Açıklanamayan bir sıralama, denetlenemeyeceği için kullanılabilir "
+        "istihbarat değildir.",
     )
     render_evidence(result)
 
@@ -390,43 +477,14 @@ def render_query_tab(artifacts: EngineArtifacts) -> None:
 def render_confidence(result: QueryResult) -> None:
     """Confidence badge plus its three components.
 
-    A bare percentage invites false certainty, so all three components are shown
-    and the weak ones are called out by name.
-
     Args:
         result: The query result being displayed.
     """
-    breakdown = result.confidence
-    level = breakdown.level.value
-    colour = CONFIDENCE_COLORS[level]
-
-    st.markdown(
-        f"### Güven: <span style='color:{colour}'>{CONFIDENCE_LABELS_TR[level]}</span> "
-        f"<span style='color:#888;font-size:0.7em'>({breakdown.score:.3f})</span>",
-        unsafe_allow_html=True,
+    theme.confidence_panel(
+        result.confidence,
+        confidence_mod.explain(result.confidence),
+        config.CONFIDENCE_COMPONENT_WEIGHTS,
     )
-
-    components = [
-        ("Nadirlik", breakdown.rarity, 0.40, "Eşleşen teknikler ne kadar ayırt edici"),
-        ("Fark", breakdown.margin, 0.35, "1. aday 2. adaydan ne kadar ayrışıyor"),
-        ("Yeterlilik", breakdown.sufficiency, 0.25, "Karar için yeterli teknik girildi mi"),
-    ]
-    for column, (name, value, weight, help_text) in zip(st.columns(3), components):
-        weak = value <= WEAK_COMPONENT
-        column.metric(
-            f"{'⚠ ' if weak else ''}{name} ({weight:.2f})",
-            f"{value:.3f}",
-            help=help_text,
-        )
-        column.progress(min(max(value, 0.0), 1.0))
-
-    try:
-        from ..engine import confidence as confidence_mod
-
-        for reason in confidence_mod.explain(breakdown):
-            st.caption(f"• {reason}")
-    except NotImplementedError:
-        pass
 
 
 def render_evidence(result: QueryResult) -> None:
@@ -435,39 +493,27 @@ def render_evidence(result: QueryResult) -> None:
     Args:
         result: The query result being displayed.
     """
-    st.subheader("Kanıt dökümü")
     for candidate in result.candidates:
         title = (
-            f"{candidate.rank}. {candidate.actor_name} — {candidate.score:.4f} "
-            f"({len(candidate.matched_technique_ids)} eşleşen)"
+            f"{candidate.rank:02d}  {candidate.actor_name}   "
+            f"{candidate.score:.4f}   "
+            f"{len(candidate.matched_technique_ids)} eşleşen"
         )
         with st.expander(title, expanded=candidate.rank == 1):
             if candidate.evidence:
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {
-                                "teknik": e.technique_id,
-                                "ad": e.technique_name,
-                                "ağırlık": round(e.weight, 3),
-                                "katkı %": round(e.contribution * 100, 1),
-                            }
-                            for e in candidate.evidence
-                        ]
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                )
+                theme.evidence_bars(candidate.evidence)
             else:
-                st.caption("Bu adayda eşleşen teknik yok.")
+                theme.banner("Bu adayda eşleşen teknik yok.", "info")
 
             if candidate.missing_technique_ids:
-                st.caption(
-                    "Bu aktörde görülmeyen sorgu teknikleri: "
-                    + ", ".join(candidate.missing_technique_ids)
+                st.html(
+                    '<div class="ttp-rail-h">Bu aktörde görülmeyen sorgu teknikleri</div>'
                 )
+                theme.chips(candidate.missing_technique_ids, tone="off")
             else:
-                st.caption("Sorgudaki her teknik bu aktörde görülmüş.")
+                st.html(
+                    '<div class="ttp-rail-h">Sorgudaki her teknik bu aktörde görülmüş</div>'
+                )
 
 
 # --------------------------------------------------------------------------- #
@@ -480,9 +526,10 @@ def render_case_study_tab(artifacts: EngineArtifacts) -> None:
         artifacts: Loaded engine artefacts.
     """
     if artifacts.similarity is None:
-        st.warning(
-            "Benzerlik matrisi bulunamadı. Çalıştırın: "
-            f"`python -m ttp_similarity.engine.build --dataset {artifacts.dataset}`"
+        theme.banner(
+            "Benzerlik matrisi bulunamadı.",
+            "warn",
+            code=f"python -m ttp_similarity.engine.build --dataset {artifacts.dataset}",
         )
         return
 
@@ -490,47 +537,83 @@ def render_case_study_tab(artifacts: EngineArtifacts) -> None:
     by_id = artifacts.actor_by_id()
     default = "G0065" if "G0065" in labels else list(labels)[0]
 
+    theme.section("01", "Konu")
     left, right = st.columns([3, 1])
     actor_id = left.selectbox(
         "Aktör",
         list(labels),
         index=list(labels).index(default),
         format_func=lambda a: labels[a],
+        label_visibility="collapsed",
     )
     limit = right.slider("Komşu sayısı", 5, 30, 15)
     actor = by_id[actor_id]
 
-    first, second, third = st.columns(3)
-    first.metric("Teknik sayısı", len(actor.technique_ids))
-    second.metric("Takma ad", len(actor.aliases))
-    third.metric("Küme", artifacts.clusters.get(actor_id, "-") if artifacts.clusters else "-")
-    if actor.aliases:
-        st.caption("Takma adlar: " + ", ".join(actor.aliases))
-
-    st.subheader("En benzer aktörler")
-    st.caption(
-        "**ortak ağırlık ort.** yorumun merkezi: benzerlik nadir tekniklerden mi "
-        "yoksa emtia tekniklerden mi geliyor?"
-    )
-    st.dataframe(
-        _neighbours(actor, artifacts, limit), hide_index=True, width="stretch"
-    )
-
-    st.subheader("Teknikleri, ağırlığa göre")
     frequency = loaders.get_technique_frequency(artifacts.dataset)
     counts = dict(zip(frequency["technique_id"], frequency["actor_count"]))
-    table = pd.DataFrame(
+    own_weights = [artifacts.weights.get(t, 0.0) for t in actor.technique_ids]
+
+    theme.stats(
         [
-            {
-                "teknik": tid,
-                "ad": artifacts.technique_names.get(tid, tid),
-                "ağırlık": round(artifacts.weights.get(tid, float("nan")), 3),
-                "kaç aktörde": int(counts.get(tid, 0)),
-            }
-            for tid in actor.technique_ids
+            ("Aktör", actor.actor_id),
+            ("Teknik", len(actor.technique_ids)),
+            ("Takma ad", len(actor.aliases)),
+            ("Küme", artifacts.clusters.get(actor_id, "-") if artifacts.clusters else "-"),
+            ("Ort. ağırlık", f"{np.mean(own_weights):.3f}" if own_weights else "-"),
         ]
-    ).sort_values("ağırlık", ascending=False)
-    st.dataframe(table, hide_index=True, width="stretch")
+    )
+    if actor.aliases:
+        theme.chips(actor.aliases)
+
+    theme.section(
+        "02",
+        "En benzer aktörler",
+        "«ortak ağ. ort.» yorumun merkezi: benzerlik nadir tekniklerden mi, "
+        "yoksa emtia tekniklerden mi geliyor?",
+    )
+    theme.table(
+        columns=(
+            ("#", "ttp-rank"),
+            ("aktör", "ttp-name"),
+            ("id", "ttp-id"),
+            ("skor", "ttp-num"),
+            ("teknik", "ttp-num ttp-num--sub"),
+            ("ortak", "ttp-num ttp-num--sub"),
+            ("ortak ağ. ort.", "ttp-num"),
+            ("ağ. maks.", "ttp-num ttp-num--sub"),
+        ),
+        rows=_neighbour_rows(actor, artifacts, limit),
+        grid="2.2rem 1fr 13rem 4.8rem 4.2rem 3.8rem 7rem 5rem",
+    )
+
+    theme.section(
+        "03",
+        "Teknikleri, ağırlığa göre",
+        "Üstteki uç ayırt edici davranış, alttaki uç emtia davranıştır.",
+    )
+    rows = sorted(
+        (
+            [
+                tid,
+                artifacts.technique_names.get(tid, tid),
+                f"{artifacts.weights.get(tid, float('nan')):.3f}",
+                int(counts.get(tid, 0)),
+            ]
+            for tid in actor.technique_ids
+        ),
+        key=lambda row: float(row[2]),
+        reverse=True,
+    )
+    theme.table(
+        columns=(
+            ("teknik", "ttp-ev__id"),
+            ("ad", "ttp-cell"),
+            ("ağırlık", "ttp-num"),
+            ("kaç aktörde", "ttp-num ttp-num--sub"),
+        ),
+        rows=rows,
+        grid="5rem 1fr 5.4rem 7rem",
+    )
 
 
 def render_setup_help(datasets: list[str]) -> None:
@@ -539,15 +622,18 @@ def render_setup_help(datasets: list[str]) -> None:
     Args:
         datasets: Currently available datasets (empty in this branch).
     """
-    st.title("TTP Similarity Engine")
-    st.error("Kullanılabilir bir veri seti bulunamadı.")
-    st.markdown(
-        "Önce aşağıdaki komutları çalıştırın:\n\n"
-        "```bash\n"
-        "# 1) Sentetik veri seti (gerçek veri olmadan denemek için)\n"
-        "python -m ttp_similarity.data.mock_dataset\n\n"
-        "# 2) Motor artefaktları\n"
-        f"python -m ttp_similarity.engine.build --dataset {paths.MOCK_DATASET}\n"
-        "```"
+    theme.inject()
+    theme.header("TTP Similarity Engine", {"durum": "kurulum gerekli"})
+    theme.banner("Kullanılabilir bir veri seti bulunamadı.", "err")
+    theme.section("01", "Önce bunları çalıştırın")
+    theme.banner(
+        "Sentetik veri seti (gerçek veri olmadan denemek için):",
+        "info",
+        code="python -m ttp_similarity.data.mock_dataset",
+    )
+    theme.banner(
+        "Motor artefaktları:",
+        "info",
+        code=f"python -m ttp_similarity.engine.build --dataset {paths.MOCK_DATASET}",
     )
     render_disclaimer()

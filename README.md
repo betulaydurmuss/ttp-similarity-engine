@@ -31,7 +31,7 @@ Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmı�
 | Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | ✅ Tamam |
 | Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | ✅ Tamam |
 | Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` | ✅ Tamam |
-| Streamlit arayüzü (3 sekme) | `ttp_similarity/app/{streamlit_app,views,plots}.py` | ✅ Tamam |
+| Streamlit arayüzü (3 ekran, koyu konsol) | `ttp_similarity/app/{streamlit_app,views,theme,plots}.py` | ✅ Tamam |
 
 ---
 
@@ -214,7 +214,9 @@ ttp-similarity-engine/
 │   ├── data/                    # aşama 1: ATT&CK -> temiz tablo
 │   ├── engine/                  # aşama 2: ağırlık, vektör, benzerlik, sorgu
 │   ├── evaluation/              # aşama 3: başarım testi
-│   └── app/                     # aşama 4: Streamlit arayüzü
+│   └── app/                     # aşama 4: Streamlit arayüzü (theme.py = tasarım sistemi)
+├── .streamlit/
+│   └── config.toml              # koyu tema; renkler app/theme.py PALETTE ile aynı
 ├── data/                        # üretilen veri dosyaları (git'e girmez)
 │   ├── raw/                     # indirilen STIX paketi
 │   ├── interim/                 # ara çıktılar
@@ -364,9 +366,15 @@ Bilinen bir aktörün tekniklerinden rastgele `k` tanesi seçilir, sanki yeni bi
 
 ### `app/` — Streamlit arayüzü
 
-- **Benzerlik ısı haritası** — kümeleme sırasına göre dizilmiş aktör-aktör benzerlik matrisi, seçilen aktörün en yakın komşuları, küme profilleri.
-- **TTP sorgu ekranı** — teknik listesi girilir; aday aktörler, güven seviyesi ve üç bileşeni, eşleşen teknikler ve katkı payları görüntülenir.
-- **Veri seti ekranı** — aktör listesi, teknik frekans dağılımı, ağırlık dağılımı.
+Koyu bir analiz konsolu olarak tasarlanmıştır: sol rayda navigasyon, dolu kart yerine ince çizgiler, tüm teknik kimlikleri ve skorlar monospace. Üç ekran raydan seçilir:
+
+- **Isı haritası** — kümeleme dendrogramına göre sıralanmış aktör-aktör benzerlik matrisi (her zaman bir alt küme: odak aktör + komşuları, elle seçim veya uzayın en yoğun N aktörü) ve görünümdeki en benzer çiftler.
+- **TTP sorgu** — teknik listesi girilir; aday aktörler skor çubuklarıyla, güven paneli üç bileşeni ve zayıf olanın adıyla, her aday için kanıt dökümü ve o aktörde görülmeyen sorgu teknikleri görüntülenir.
+- **Vaka çalışması** — tek aktörün profili: komşuları ve **ortak ağırlık ortalaması** (benzerlik nadir tekniklerden mi emtia tekniklerden mi geliyor), kendi teknikleri ağırlığa göre sıralı.
+
+Modül ayrımı: `streamlit_app.py` kabuk (sayfa ayarı, ray dispatch'i, hata yakalama) · `views.py` ekran başına bir fonksiyon, yalnızca *ne gösterildiği* · `theme.py` tasarım token'ları, stil sayfası ve `st.metric`/`st.dataframe` yerine geçen HTML bileşenleri · `plots.py` matplotlib figürleri (hiç `st.*` çağrısı yok) · `loaders.py` önbellekli disk erişimi.
+
+Tema `.streamlit/config.toml` ile kurulur; oradaki beş renk `theme.PALETTE` ile aynı token'lardır, biri değişirse ikisi birlikte değişir. Heatmap konsolda koyu (`dark=True`), `outputs/figures/` altına kaydedilen rapor figürleri açık kalır.
 
 Arayüzde puanlama mantığı yoktur; her hesap motorda yapılır, böylece CLI ile arayüz aynı sonucu verir.
 

@@ -4,13 +4,15 @@ Run from the repository root::
 
     streamlit run ttp_similarity/app/streamlit_app.py
 
-This file is the shell only: page config, dataset selection, tab layout and
-error handling. Every screen lives in :mod:`ttp_similarity.app.views`, every
-figure in :mod:`ttp_similarity.app.plots`, and all scoring in the engine.
+This file is the shell only: page config, stylesheet injection, dataset
+selection, rail dispatch and error handling. Every screen lives in
+:mod:`ttp_similarity.app.views`, every style token and HTML component in
+:mod:`ttp_similarity.app.theme`, every figure in
+:mod:`ttp_similarity.app.plots`, and all scoring in the engine.
 
-The shell is implemented so the app runs today: each tab shows a placeholder
-naming the function still to be written, and the whole app degrades to setup
-instructions when nothing has been built yet.
+Sections are reached from a left rail rather than from ``st.tabs``: only one
+screen's widgets are then instantiated per run, so switching screens does not
+re-render the other two, and the active entry can carry a real selected state.
 
 Owner: app module.
 """
@@ -35,7 +37,7 @@ import streamlit as st  # noqa: E402
 # the exception type lives inside the package that failed to import.
 try:
     from ttp_similarity import config, paths, storage  # noqa: E402
-    from ttp_similarity.app import loaders, views  # noqa: E402
+    from ttp_similarity.app import loaders, theme, views  # noqa: E402
 except Exception as _import_error:  # noqa: BLE001
     if type(_import_error).__name__ != "UnsupportedPythonError":
         raise
@@ -46,7 +48,13 @@ except Exception as _import_error:  # noqa: BLE001
     st.stop()
 
 PAGE_TITLE = "TTP Similarity Engine"
-TAB_LABELS = ("Benzerlik Isi Haritasi", "TTP Sorgu", "Veri Seti")
+
+#: Rail key -> (renderer attribute name, subtitle shown under the top bar).
+SECTIONS = {
+    "heatmap": ("render_heatmap_tab", "Aktörler arası davranışsal benzerlik matrisi"),
+    "query": ("render_query_tab", "Gözlemlenen TTP setini bilinen aktörlerle karşılaştır"),
+    "case": ("render_case_study_tab", "Tek aktörün profili ve komşuluğu"),
+}
 
 
 def configure_page() -> None:
@@ -69,44 +77,42 @@ def main() -> None:
         views.render_setup_help(datasets)
         return
 
-    # The sidebar is still a TODO; fall back to the default dataset so the rest
-    # of the layout is reviewable in the meantime.
-    try:
-        dataset = views.render_sidebar(datasets)
-    except NotImplementedError:
-        dataset = paths.DEFAULT_DATASET if paths.DEFAULT_DATASET in datasets else datasets[0]
-        st.sidebar.info("Henuz uygulanmadi: `views.render_sidebar`")
-        st.sidebar.caption(f"Varsayilan veri seti: {dataset}")
+    theme.inject()
+    section = views.render_nav()
+    dataset = views.render_sidebar(datasets)
 
-    st.title(PAGE_TITLE)
-    st.caption(
-        "MITRE ATT&CK tabanli davranissal benzerlik olcumu - "
-        f"veri seti: `{dataset}`"
+    manifest = loaders.get_manifest_summary(dataset)
+    theme.header(
+        PAGE_TITLE,
+        {
+            "veri seti": dataset,
+            "att&ck": manifest.get("ATT&CK surumu", "-"),
+            "aktör": manifest.get("Aktör", "-"),
+            "teknik": manifest.get("Teknik", "-"),
+        },
     )
     views.render_disclaimer()
 
     if not loaders.engine_is_built(dataset):
-        st.error(
-            f"'{dataset}' veri seti icin motor artefaktlari eksik. "
-            f"Calistirin: `python -m ttp_similarity.engine.build --dataset {dataset}`"
+        theme.banner(
+            f"'{dataset}' veri seti için motor artefaktları eksik.",
+            "err",
+            code=f"python -m ttp_similarity.engine.build --dataset {dataset}",
         )
         return
 
     try:
         artifacts = loaders.get_engine(dataset)
     except storage.ArtifactMissingError as error:
-        st.error(str(error))
+        theme.banner(str(error), "err")
         return
 
-    heatmap_tab, query_tab, case_tab = st.tabs(list(TAB_LABELS))
-    with heatmap_tab:
-        views.guard(lambda: views.render_heatmap_tab(artifacts), "views.render_heatmap_tab")
-    with query_tab:
-        views.guard(lambda: views.render_query_tab(artifacts), "views.render_query_tab")
-    with case_tab:
-        views.guard(
-            lambda: views.render_case_study_tab(artifacts), "views.render_case_study_tab"
-        )
+    renderer_name, subtitle = SECTIONS[section]
+    renderer = getattr(views, renderer_name)
+    st.html(
+        f'<div class="ttp-sec__note" style="margin:-0.5rem 0 0.2rem">{subtitle}</div>'
+    )
+    views.guard(lambda: renderer(artifacts), f"views.{renderer_name}")
 
 
 main()

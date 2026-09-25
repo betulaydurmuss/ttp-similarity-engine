@@ -1,0 +1,23 @@
+# Streamlit theme. The base theme has to be set here rather than in CSS:
+# Streamlit paints its own chrome before any injected <style> runs, so without
+# this the page flashes white and every widget ships light-mode defaults that
+# the CSS in ttp_similarity/app/theme.py would then have to fight.
+#
+# These five colours are the same tokens as theme.PALETTE. When one changes
+# here, change it there too.
+[theme]
+base = "dark"
+primaryColor = "#4fd1c5"          # accent: focus rings, sliders, primary buttons
+backgroundColor = "#0b0f14"       # page
+secondaryBackgroundColor = "#111720"  # sidebar, inputs, expanders
+textColor = "#e3e9f2"
+font = "sans serif"
+
+[client]
+# The console draws its own header and left rail; Streamlit's hamburger menu
+# and "Deploy" toolbar are noise on a locally run analysis tool.
+toolbarMode = "minimal"
+showErrorDetails = true
+
+[browser]
+gatherUsageStats = false

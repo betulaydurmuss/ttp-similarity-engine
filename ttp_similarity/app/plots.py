@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
+from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 from .. import config  # noqa: E402
@@ -26,6 +27,18 @@ from ..schema import SimilarityMatrix  # noqa: E402
 #: Above this many actors the per-cell numbers stop being legible.
 ANNOTATION_LIMIT = 20
 
+#: Console colormap, built from the palette in
+#: :mod:`ttp_similarity.app.theme` so the matrix belongs to the same design as
+#: the rest of the page. Runs from the page background up through the accent, so
+#: a weak similarity reads as "empty" rather than as a colour of its own.
+DARK_CMAP = LinearSegmentedColormap.from_list(
+    "ttp_dark",
+    ["#0b0f14", "#12262e", "#17414a", "#1d6a6b", "#2f9f93", "#4fd1c5", "#b4efe8"],
+)
+
+#: Palette for the dark figure furniture (ticks, title, colourbar).
+_DARK_INK = {"text": "#e3e9f2", "muted": "#8b97a8", "line": "#1f2937"}
+
 
 def similarity_heatmap(
     similarity: SimilarityMatrix,
@@ -33,7 +46,8 @@ def similarity_heatmap(
     order: list[int] | None = None,
     *,
     annotate: bool | None = None,
-    cmap: str = config.HEATMAP_COLORMAP,
+    cmap: str | None = None,
+    dark: bool = False,
 ) -> Figure:
     """Render the actor-vs-actor similarity matrix.
 
@@ -45,7 +59,11 @@ def similarity_heatmap(
             it the plot is in id order and shows no structure.
         annotate: Print the value inside each cell. ``None`` decides from the
             matrix size -- annotations stop being readable past ~20 actors.
-        cmap: Colormap name.
+        cmap: Colormap name. ``None`` uses :data:`DARK_CMAP` when ``dark`` is
+            set, otherwise :data:`ttp_similarity.config.HEATMAP_COLORMAP`.
+        dark: Render for the console: transparent figure, light ink, accent
+            colormap. Left ``False`` for figures saved to
+            ``outputs/figures/`` -- a dark plot is wrong in a printed report.
 
     Returns:
         A matplotlib :class:`~matplotlib.figure.Figure`.
@@ -60,6 +78,8 @@ def similarity_heatmap(
     count = len(labels)
     if annotate is None:
         annotate = count <= ANNOTATION_LIMIT
+    if cmap is None:
+        cmap = DARK_CMAP if dark else config.HEATMAP_COLORMAP
 
     side = max(4.0, min(0.42 * count + 2.0, 22.0))
     figure, axes = plt.subplots(figsize=(side, side * 0.85))
@@ -73,16 +93,47 @@ def similarity_heatmap(
         square=True,
         annot=annotate,
         fmt=".2f",
-        annot_kws={"size": 7},
+        annot_kws={"size": 7, "color": _DARK_INK["text"] if dark else None},
         linewidths=0.3 if count <= 40 else 0.0,
+        linecolor=_DARK_INK["line"] if dark else "white",
         cbar_kws={"label": "benzerlik", "shrink": 0.6},
         ax=axes,
     )
     axes.set_xticklabels(axes.get_xticklabels(), rotation=90, fontsize=8)
     axes.set_yticklabels(axes.get_yticklabels(), rotation=0, fontsize=8)
     axes.set_title(f"Aktör benzerlik matrisi ({count} aktör, {similarity.metric})")
+    if dark:
+        _apply_dark_ink(figure, axes)
     figure.tight_layout()
     return figure
+
+
+def _apply_dark_ink(figure: Figure, axes) -> None:
+    """Recolour a finished figure for the dark console.
+
+    Applied after plotting rather than through a global rcParams style so that
+    the same module can still produce light figures for the written report in
+    the same process.
+
+    Args:
+        figure: The figure to recolour.
+        axes: Its main axes. Any colourbar is found via ``figure.axes``.
+    """
+    figure.patch.set_alpha(0.0)
+    axes.set_facecolor("#0b0f14")
+    axes.title.set_color(_DARK_INK["text"])
+    axes.title.set_fontsize(10)
+    for label in (*axes.get_xticklabels(), *axes.get_yticklabels()):
+        label.set_color(_DARK_INK["muted"])
+    for spine in axes.spines.values():
+        spine.set_color(_DARK_INK["line"])
+    # seaborn appends the colourbar as an extra axes on the same figure.
+    for extra in figure.axes[1:]:
+        extra.tick_params(colors=_DARK_INK["muted"], labelsize=7)
+        extra.yaxis.label.set_color(_DARK_INK["muted"])
+        extra.yaxis.label.set_fontsize(8)
+        for spine in extra.spines.values():
+            spine.set_color(_DARK_INK["line"])
 
 
 def technique_frequency_plot(frequency: pd.DataFrame, top_n: int = 25) -> Figure:
