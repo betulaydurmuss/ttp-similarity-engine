@@ -10,28 +10,28 @@ MITRE ATT&CK Enterprise verisini kullanarak tehdit aktörlerinin davranışsal p
 
 Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır. **Dört modülün tamamı çalışır durumdadır:** ATT&CK ingest, IDF ağırlıklandırma / benzerlik / kümeleme / sorgu, başarım testi ve Streamlit arayüzü. Tek eksik `clustering.cluster_profile()`.
 
-| Bileşen | Dosya |
-|---|---|
-| Ortak veri modeli | `ttp_similarity/schema.py` |
-| Dosya yolları / workspace | `ttp_similarity/paths.py` |
-| Ayarlar ve eşikler | `ttp_similarity/config.py` |
-| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` |
-| Python sürüm koruması | `ttp_similarity/pyversion.py` |
-| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` |
-| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` |
-| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` |
-| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` |
-| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` |
-| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` |
-| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` (`cluster_profile` hariç) |
-| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` |
-| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` |
-| Motor build pipeline | `ttp_similarity/engine/build.py` |
-| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` |
-| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` |
-| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` |
-| Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` |
-| Streamlit arayüzü (3 sekme) | `ttp_similarity/app/{streamlit_app,views,plots}.py` |
+| Bileşen | Dosya | Durum |
+|---|---|---|
+| Ortak veri modeli | `ttp_similarity/schema.py` | ✅ Tamam |
+| Dosya yolları / workspace | `ttp_similarity/paths.py` | ✅ Tamam |
+| Ayarlar ve eşikler | `ttp_similarity/config.py` | ✅ Tamam |
+| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` | ✅ Tamam |
+| Python sürüm koruması | `ttp_similarity/pyversion.py` | ✅ Tamam |
+| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` | ✅ Tamam |
+| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` | ✅ Tamam |
+| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` | ✅ Tamam |
+| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` | ✅ Tamam |
+| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` | ✅ Tamam |
+| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` | ✅ Tamam |
+| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` | ✅ Tamam (`cluster_profile` hariç) |
+| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` | ✅ Tamam |
+| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` | ✅ Tamam |
+| Motor build pipeline | `ttp_similarity/engine/build.py` | ✅ Tamam |
+| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` | ✅ Tamam |
+| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` | ✅ Tamam |
+| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` | ✅ Tamam |
+| Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` | ✅ Tamam |
+| Streamlit arayüzü (3 ekran, koyu konsol) | `ttp_similarity/app/{streamlit_app,views,theme,plots}.py` | ✅ Tamam |
 
 ---
 
@@ -231,8 +231,17 @@ python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
 # 3b) JSON çıktı ✅
 python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock --json
 
-# 4) Başarım testi (evaluation modülü tamamlandığında)
+# 4) Başarım testi ✅
 python -m ttp_similarity.evaluation.benchmark --dataset mock
+
+# 4b) Ağırlık şeması / metrik / eşik karşılaştırmaları ✅
+python -m ttp_similarity.evaluation.benchmark --dataset attck --compare
+
+# 4c) Üç zorluk rejimi: A referans, B seyrek sorgu, C gürültülü sorgu ✅
+python -m ttp_similarity.evaluation.benchmark --dataset attck --regimes
+
+# 4d) Tek aktör için vaka çalışması materyali ✅
+python -m ttp_similarity.evaluation.case_study --dataset attck --actor G0065
 
 # 5) Arayüz
 streamlit run ttp_similarity/app/streamlit_app.py
@@ -276,7 +285,9 @@ ttp-similarity-engine/
 │   ├── data/                    # aşama 1: ATT&CK -> temiz tablo
 │   ├── engine/                  # aşama 2: ağırlık, vektör, benzerlik, sorgu
 │   ├── evaluation/              # aşama 3: başarım testi
-│   └── app/                     # aşama 4: Streamlit arayüzü
+│   └── app/                     # aşama 4: Streamlit arayüzü (theme.py = tasarım sistemi)
+├── .streamlit/
+│   └── config.toml              # koyu tema; renkler app/theme.py PALETTE ile aynı
 ├── data/                        # üretilen veri dosyaları (git'e girmez)
 │   ├── raw/                     # indirilen STIX paketi
 │   ├── interim/                 # ara çıktılar
@@ -287,9 +298,15 @@ ttp-similarity-engine/
 │   └── reports/<veri-seti>/     # başarım raporları
 ├── tests/
 │   ├── test_contract.py         # modüller arası sözleşme testleri
+│   ├── test_data_pipeline.py    # aşama 1 boru hattı testleri
 │   ├── test_engine.py           # motor modülü birim testleri
+│   ├── test_engine_properties.py# motorun değişmezleri (property testleri)
+│   ├── test_evaluation.py       # örnekleme ve metrik testleri
 │   ├── test_mock_dataset.py     # sahte veri seti testleri
 │   └── test_python_pin.py       # Python sürüm sabiti testleri
+├── Dockerfile                   # Python 3.11 imajı
+├── docker-compose.yml           # `app` servisi + `setup` profili
+├── .dockerignore
 ├── check_setup.py               # tek komutla kurulum doğrulama
 ├── .python-version              # 3.11 (pyenv sürüm sabiti, versiyonlanır)
 ├── pyproject.toml               # requires-python = ">=3.11,<3.12"
@@ -420,15 +437,47 @@ Bilinen bir aktörün tekniklerinden rastgele `k` tanesi seçilir, sanki yeni bi
 - Sorgu boyutuna göre kırılım — "kaç teknik gerekiyor?" sorusunun cevabı
 - **Güven seviyesine göre kırılım** — kalibrasyon kontrolü: `yüksek` etiketli sonuçlar `düşük` etiketlilerden belirgin biçimde daha doğru olmalıdır, aksi halde güven skoru süstür.
 
-Çıktı: `outputs/reports/<veri-seti>/evaluation.json` ve `evaluation_trials.csv`.
+#### CLI bayrakları
+
+| Bayrak | Etkisi |
+|---|---|
+| `--dataset` | `mock` veya `attck` |
+| `--compare` | Üç karşılaştırmayı birden çalıştırır: ağırlık şeması, benzerlik metriği, kapsam düzeltmesi |
+| `--regimes` | Üç zorluk rejimini çalıştırır: **A** referans (aktörün tekniklerinin %50'si, gürültüsüz), **B** seyrek sorgu (%25, gürültüsüz), **C** gürültülü sorgu (%25 + yabancı teknik enjeksiyonu). Diğer tüm parametreler sabit tutulur, böylece fark yalnızca zorluktan gelir |
+| `--scheme` | `smooth_idf` / `plain_idf` / `binary` — tek koşu için `config` değerini ezer |
+| `--metric` | `cosine` / `jaccard` |
+| `--min-techniques` | Denemeye alınacak aktörler için asgari teknik sayısı |
+| `--coverage-correction` | Kapsam düzeltmesini açar |
+| `--fraction` / `--repeats` / `--seed` | Örnekleme oranı, aktör başına tekrar, tohum |
+
+#### Çıktılar (`outputs/reports/<veri-seti>/`)
+
+| Dosya | İçerik |
+|---|---|
+| `evaluation.json` | Toplu metrikler: top-1, top-3, MRR, kırılımlar |
+| `evaluation_trials.csv` | Her deneme tek satır — sorgu, doğru aktör, çıkan sıra, güven |
+| `benchmark_report.txt` | Aynı sonuçların okunabilir metin özeti |
+| `by_confidence.csv` | Güven seviyesine göre kırılım (kalibrasyon kontrolü) |
+| `by_technique_count.csv` | Sorgu boyutuna göre kırılım |
+| `comparison_summary.csv` + `trials_<koşul>.csv` | `--compare` çıktısı: şema / metrik / kapsam düzeltmesi karşılaştırması |
+| `confidence_threshold_sweep.csv` | Güven eşiklerinin taranması |
+| `regime_summary.csv`, `regime_report.txt`, `regime_significance.csv`, `regime_trials_*.csv` | `--regimes` çıktısı ve anlamlılık testleri |
+
+`case_study.py` ayrıca seçilen aktör için `case_<aktör-id>/` altına o aktöre ait figür ve tabloları yazar.
 
 > Not: Alt küme, motorun indekslediği aynı ATT&CK kayıtlarından çekilir. Bu nedenle ölçülen şey **erişim tutarlılığıdır**, gerçek dünya attribution doğruluğu değildir.
 
 ### `app/` — Streamlit arayüzü
 
-- **Benzerlik ısı haritası** — kümeleme sırasına göre dizilmiş aktör-aktör benzerlik matrisi, seçilen aktörün en yakın komşuları, küme profilleri.
-- **TTP sorgu ekranı** — teknik listesi girilir; aday aktörler, güven seviyesi ve üç bileşeni, eşleşen teknikler ve katkı payları görüntülenir.
-- **Veri seti ekranı** — aktör listesi, teknik frekans dağılımı, ağırlık dağılımı.
+Koyu bir analiz konsolu olarak tasarlanmıştır: sol rayda navigasyon, dolu kart yerine ince çizgiler, tüm teknik kimlikleri ve skorlar monospace. Üç ekran raydan seçilir:
+
+- **Isı haritası** — kümeleme dendrogramına göre sıralanmış aktör-aktör benzerlik matrisi (her zaman bir alt küme: odak aktör + komşuları, elle seçim veya uzayın en yoğun N aktörü) ve görünümdeki en benzer çiftler.
+- **TTP sorgu** — teknik listesi girilir; aday aktörler skor çubuklarıyla, güven paneli üç bileşeni ve zayıf olanın adıyla, her aday için kanıt dökümü ve o aktörde görülmeyen sorgu teknikleri görüntülenir.
+- **Vaka çalışması** — tek aktörün profili: komşuları ve **ortak ağırlık ortalaması** (benzerlik nadir tekniklerden mi emtia tekniklerden mi geliyor), kendi teknikleri ağırlığa göre sıralı.
+
+Modül ayrımı: `streamlit_app.py` kabuk (sayfa ayarı, ray dispatch'i, hata yakalama) · `views.py` ekran başına bir fonksiyon, yalnızca *ne gösterildiği* · `theme.py` tasarım token'ları, stil sayfası ve `st.metric`/`st.dataframe` yerine geçen HTML bileşenleri · `plots.py` matplotlib figürleri (hiç `st.*` çağrısı yok) · `loaders.py` önbellekli disk erişimi.
+
+Tema `.streamlit/config.toml` ile kurulur; oradaki beş renk `theme.PALETTE` ile aynı token'lardır, biri değişirse ikisi birlikte değişir. Heatmap konsolda koyu (`dark=True`), `outputs/figures/` altına kaydedilen rapor figürleri açık kalır.
 
 Arayüzde puanlama mantığı yoktur; her hesap motorda yapılır, böylece CLI ile arayüz aynı sonucu verir.
 
