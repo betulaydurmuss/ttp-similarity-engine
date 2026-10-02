@@ -316,7 +316,8 @@ def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
             return
 
     else:
-        count = st.slider("Aktör sayısı", 5, min(60, total), 25)
+        upper = min(60, total)
+        count = st.slider("Aktör sayısı", min(5, upper), upper, min(25, upper))
         # Rank by mean similarity to everyone else: the actors that sit in the
         # dense middle of the space, which is where the block structure shows.
         matrix = artifacts.similarity.matrix
