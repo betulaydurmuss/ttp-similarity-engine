@@ -47,7 +47,9 @@ RUN pip install --upgrade pip \
 
 # Kaynak kodu kopyala
 COPY ttp_similarity/ ./ttp_similarity/
-COPY check_setup.py pyproject.toml ./
+COPY check_setup.py pyproject.toml .python-version ./
+COPY .streamlit/ ./.streamlit/
+COPY tests/ ./tests/
 
 # Veri ve cikti dizinleri (volume mount oncesi bos yapi olusturulur)
 RUN mkdir -p \
