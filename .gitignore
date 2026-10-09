@@ -43,3 +43,7 @@ data/mock/*
 outputs/figures/*
 outputs/reports/*
 !**/.gitkeep
+
+# --- Web interface ---
+web/node_modules/
+web/dist/

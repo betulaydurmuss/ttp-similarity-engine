@@ -1,0 +1,184 @@
+<script>
+  import { station } from '../lib/station.svelte.js';
+
+  const modes = [
+    { id: 'observe', label: 'Gözlem', hint: 'Gözlenen teknikleri bilinen aktörlerle karşılaştır' },
+    { id: 'explore', label: 'Harita', hint: 'Aktör uzayını ve takımyıldızları gez' },
+    { id: 'trust', label: 'Güven', hint: 'İstasyon ne kadar isabetli, ölçülmüş hâli' }
+  ];
+
+  const active = $derived(Math.max(0, modes.findIndex((m) => m.id === station.mode)));
+
+  function choose(id) {
+    station.mode = id;
+    if (id === 'trust') station.loadTrust();
+    if (id !== 'explore') station.constellationFocus = null;
+  }
+</script>
+
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+      <circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35" />
+      <ellipse cx="16" cy="16" rx="12.5" ry="5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.6" transform="rotate(-28 16 16)" />
+      <circle cx="16" cy="16" r="3" fill="#ffb54a" />
+      <circle cx="26.4" cy="10.5" r="1.6" fill="#e9eef5" />
+    </svg>
+    <div class="name">
+      <strong>İstasyon</strong>
+      <span>TTP benzerlik</span>
+    </div>
+  </div>
+
+  <nav class="modes" style:--active={active} aria-label="Bölümler">
+    <span class="indicator" aria-hidden="true"></span>
+    {#each modes as mode}
+      <button
+        class:on={station.mode === mode.id}
+        aria-current={station.mode === mode.id ? 'page' : undefined}
+        title={mode.hint}
+        onclick={() => choose(mode.id)}
+      >
+        {mode.label}
+      </button>
+    {/each}
+  </nav>
+
+  <div class="meta mono">
+    {#if station.data}
+      <span>ATT&CK v{station.data.dataset.attack_version}</span>
+      <span class="sep"></span>
+      <span>{station.data.dataset.actor_count} aktör</span>
+      <span class="sep"></span>
+      <span>{station.data.dataset.technique_count} teknik</span>
+    {/if}
+    <span class="principle" title={station.data?.disclaimer}>benzerlik ≠ faillik</span>
+  </div>
+</header>
+
+<style>
+  .bar {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--bar);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 var(--gap);
+    z-index: 20;
+    background: linear-gradient(180deg, rgba(4, 6, 10, 0.92), rgba(4, 6, 10, 0));
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink-2);
+  }
+
+  .name {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+
+  .name strong {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+  }
+
+  .name span {
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .modes {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 108px);
+    border: 1px solid var(--seam-2);
+    background: rgba(10, 15, 23, 0.86);
+    padding: 3px;
+  }
+
+  .indicator {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: 108px;
+    background: var(--hull-3);
+    border-bottom: 2px solid var(--signal);
+    transform: translateX(calc(var(--active) * 100%));
+    transition: transform var(--t-base) var(--ease-out);
+  }
+
+  .modes button {
+    position: relative;
+    height: 32px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0.02em;
+    transition: color var(--t-fast);
+  }
+
+  .modes button:hover,
+  .modes button.on {
+    color: var(--ink);
+  }
+
+  .meta {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  .sep {
+    width: 3px;
+    height: 3px;
+    background: var(--seam-3);
+  }
+
+  .principle {
+    margin-left: 10px;
+    padding: 4px 9px;
+    border: 1px solid var(--signal-line);
+    color: var(--signal);
+    letter-spacing: 0.04em;
+  }
+
+  @media (max-width: 1180px) {
+    .meta > span:not(.principle),
+    .meta .sep {
+      display: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .bar {
+      position: sticky;
+      top: 0;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      background: var(--void);
+      border-bottom: 1px solid var(--seam);
+    }
+    .meta {
+      display: none;
+    }
+    .modes {
+      grid-template-columns: repeat(3, 1fr);
+      justify-self: end;
+      width: min(100%, 300px);
+    }
+    .indicator {
+      width: calc((100% - 6px) / 3);
+    }
+  }
+</style>
