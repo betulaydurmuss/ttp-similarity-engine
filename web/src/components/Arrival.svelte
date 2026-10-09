@@ -4,7 +4,8 @@
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import { int } from '../lib/format.js';
-  import wordmark from '../assets/brand/yildiz-wordmark.png';
+  import Emblem from './brand/Emblem.svelte';
+  import Wordmark from './brand/Wordmark.svelte';
 
   let { data, quick = false, onchoose } = $props();
 
@@ -47,7 +48,7 @@
   <div class="veil"></div>
   <div class="frame">
     <div class="brandline eyebrow" class:on={phase >= 1}>
-      <img src={wordmark} alt="YILDIZ" width="110" height="28" />
+      <span class="mark"><Emblem size={30} title="YILDIZ CTI" /><Wordmark height={17} /></span>
       <span>MITRE ATT&CK Enterprise · v{data.dataset.attack_version ?? '?'}</span>
     </div>
     <h1 id="arrival-title" class:on={phase >= 1}>
@@ -114,13 +115,14 @@
     gap: 16px;
   }
 
-  .brandline img {
-    display: block;
-    height: clamp(22px, 3.6vh, 28px);
-    width: auto;
+  .brandline .mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
   }
 
-  .brandline span {
+  .brandline > span:last-child {
     padding-left: 16px;
     border-left: 1px solid var(--seam-3);
   }

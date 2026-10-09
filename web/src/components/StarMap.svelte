@@ -8,8 +8,9 @@
   import { station } from '../lib/station.svelte.js';
   import { fitTransform, paddedHull, smoothPath, toWorld, WORLD } from '../lib/geometry.js';
   import { pct } from '../lib/format.js';
+  import { EMBLEM_BODY } from '../lib/brand.js';
 
-  let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, dim = false, controls = true } = $props();
+  let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, hold = false, dim = false, controls = true } = $props();
 
   let width = $state(0);
   let height = $state(0);
@@ -308,7 +309,9 @@
         {/key}
       {/if}
 
-      <g class="stars">
+      <path class="hub" d={EMBLEM_BODY} fill-rule="evenodd" transform="translate(-70 -70) scale(1.4)" />
+
+      <g class="stars" class:held={hold}>
         {#each actors as actor (actor.id)}
           {@const g = glow(actor.id)}
           {@const rank = ranked.get(actor.id)}
@@ -317,7 +320,7 @@
             class:candidate={rank !== undefined && rank <= 5}
             class:focus={station.dossierId === actor.id || station.hover === actor.id}
             class:faded={station.constellationFocus !== null && actor.cluster !== station.constellationFocus}
-            style:transform={settled || !intro ? `translate(${actor.wx}px, ${actor.wy}px)` : 'translate(0px, 0px)'}
+            style:transform={(settled && !hold) || !intro ? `translate(${actor.wx}px, ${actor.wy}px)` : 'translate(0px, 0px)'}
             style:--delay="{intro ? Math.round(actor.distance * 1.6) : 0}ms"
             style:--r="{actor.base + g * 2.6}px"
             style:--hit="{Math.max(9, actor.base + 6)}px"
@@ -476,6 +479,20 @@
     transition:
       transform var(--t-epic) var(--ease-out) var(--delay),
       opacity var(--t-slow) var(--ease-out);
+  }
+
+  .hub {
+    fill: var(--ink);
+    opacity: 0.035;
+    pointer-events: none;
+  }
+
+  .stars.held {
+    opacity: 0;
+  }
+
+  .stars {
+    transition: opacity 400ms var(--ease-out);
   }
 
   .star.faded {

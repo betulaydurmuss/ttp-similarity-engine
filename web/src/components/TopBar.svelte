@@ -1,6 +1,7 @@
 <script>
   import { station } from '../lib/station.svelte.js';
-  import wordmark from '../assets/brand/yildiz-wordmark.png';
+  import Emblem from './brand/Emblem.svelte';
+  import Wordmark from './brand/Wordmark.svelte';
 
   const modes = [
     { id: 'observe', label: 'Gözlem', hint: 'Gözlenen teknikleri bilinen aktörlerle karşılaştır' },
@@ -19,7 +20,10 @@
 
 <header class="bar">
   <div class="brand">
-    <img src={wordmark} alt="YILDIZ" width="86" height="22" />
+    <a class="lockup" href="#" aria-label="YILDIZ CTI — başa dön" onclick={(event) => { event.preventDefault(); station.mode = 'observe'; station.closeDossier(); station.recenter(); }}>
+      <Emblem size={28} twinkle />
+      <Wordmark height={15} />
+    </a>
     <span class="rule" aria-hidden="true"></span>
     <span class="name">TTP benzerlik<br />istasyonu</span>
   </div>
@@ -69,10 +73,12 @@
     gap: 12px;
   }
 
-  .brand img {
-    display: block;
-    height: 22px;
-    width: auto;
+  .lockup {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ink);
+    text-decoration: none;
   }
 
   .rule {

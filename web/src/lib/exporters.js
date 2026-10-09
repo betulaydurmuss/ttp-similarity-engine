@@ -5,11 +5,11 @@ export function navigatorLayer({ result, techniques, dataset }) {
   const top = result.candidates[0];
   const version = String(dataset.attack_version ?? '').split('.')[0] || undefined;
   return {
-    name: top ? `Gözlem — en yakın: ${top.name}` : 'Gözlem',
+    name: top ? `YILDIZ CTI · gözlem — en yakın: ${top.name}` : 'YILDIZ CTI · gözlem',
     versions: { attack: version, navigator: '5.1.0', layer: '4.5' },
     domain: 'enterprise-attack',
     description:
-      'TTP Benzerlik İstasyonu çıktısı. Skor = tekniğin nadirliği (0–1). Benzerlik ölçümüdür, faillik iddiası değildir.',
+      'YILDIZ CTI · TTP Benzerlik İstasyonu çıktısı. Skor = tekniğin nadirliği (0–1). Benzerlik ölçümüdür, faillik iddiası değildir.',
     techniques: result.query.known.map((id) => {
       const t = byId.get(id);
       const matched = top ? top.matched.includes(id) : false;
@@ -47,7 +47,7 @@ export function markdownSummary({ result, dataset }) {
   const lines = [];
   const top = result.candidates[0];
   const level = LEVELS[result.confidence.level]?.label ?? result.confidence.level;
-  lines.push(`## TTP benzerlik özeti — MITRE ATT&CK v${dataset.attack_version ?? '?'}`);
+  lines.push(`## YILDIZ CTI · TTP benzerlik özeti — MITRE ATT&CK v${dataset.attack_version ?? '?'}`);
   lines.push('');
   lines.push(`**Gözlenen teknikler (${result.query.known.length}):** ${result.query.known.join(', ') || '—'}`);
   if (result.query.unknown.length) {

@@ -50,6 +50,6 @@ describe('exporters', () => {
     const md = markdownSummary({ result: { ...result, candidates: [] }, dataset });
     expect(md).toContain('eşleşen bir aktör bulunamadı');
     const layer = navigatorLayer({ result: { ...result, candidates: [] }, techniques, dataset });
-    expect(layer.name).toBe('Gözlem');
+    expect(layer.name).toBe('YILDIZ CTI · gözlem');
   });
 });

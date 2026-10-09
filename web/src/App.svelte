@@ -18,13 +18,16 @@
   import MatrixPicker from './components/MatrixPicker.svelte';
   import Compare from './components/Compare.svelte';
   import Toast from './components/Toast.svelte';
-  import emblem from './assets/brand/yildiz-emblem.png';
+  import Emblem from './components/brand/Emblem.svelte';
+  import Ignition from './components/brand/Ignition.svelte';
 
   const ARRIVED_KEY = 'istasyon.arrived';
+  const IGNITED_KEY = 'yildiz.ignited';
 
   let width = $state(typeof window === 'undefined' ? 1440 : window.innerWidth);
   let searchInput = $state();
   let arrival = $state(false);
+  let ignition = $state(false);
   let quickArrival = $state(false);
   let hashReady = false;
   let controller;
@@ -57,6 +60,21 @@
     try {
       localStorage.setItem(ARRIVED_KEY, '1');
     } catch {}
+  }
+
+  function ignitedThisSession() {
+    try {
+      return sessionStorage.getItem(IGNITED_KEY) === '1';
+    } catch {
+      return true;
+    }
+  }
+
+  function ignited() {
+    try {
+      sessionStorage.setItem(IGNITED_KEY, '1');
+    } catch {}
+    ignition = false;
   }
 
   function seenBefore() {
@@ -94,6 +112,7 @@
       const deepLink = initial.techniques.length || initial.actor || initial.mode;
       quickArrival = seenBefore();
       arrival = !deepLink;
+      ignition = !deepLink && !ignitedThisSession();
       hashReady = true;
     })();
     return () => window.removeEventListener('hashchange', onHash);
@@ -141,7 +160,7 @@
   });
 
   function onkeydown(event) {
-    if (arrival) return;
+    if (arrival || ignition) return;
     const typing = ['INPUT', 'TEXTAREA'].includes(event.target?.tagName);
     if (event.key === '/' && !typing) {
       event.preventDefault();
@@ -176,7 +195,13 @@
 <div class="station" class:compact>
   <div class="space">
     {#if station.data}
-      <StarMap {safe} intro={arrival && !quickArrival} dim={station.mode === 'trust'} controls={!arrival && station.mode !== 'trust'} />
+      <StarMap
+        {safe}
+        intro={arrival && (!quickArrival || ignition)}
+        hold={ignition}
+        dim={station.mode === 'trust'}
+        controls={!arrival && station.mode !== 'trust'}
+      />
     {/if}
   </div>
 
@@ -195,7 +220,9 @@
     </div>
   {:else if !station.data}
     <div class="boot" aria-busy="true">
-      <img class="emblem" src={emblem} alt="" width="56" height="56" />
+      <div class="orbit">
+        <Emblem size={52} />
+      </div>
       <span class="mono">istasyon bağlanıyor</span>
     </div>
   {/if}
@@ -227,8 +254,12 @@
     {/if}
   {/if}
 
-  {#if station.data && arrival}
+  {#if station.data && arrival && !ignition}
     <Arrival data={station.data} quick={quickArrival} onchoose={choose} />
+  {/if}
+
+  {#if station.data && ignition}
+    <Ignition ondone={ignited} />
   {/if}
 
   {#if station.matrixOpen}
@@ -312,10 +343,24 @@
     text-transform: uppercase;
   }
 
-  .emblem {
-    width: 56px;
-    height: 56px;
+  .orbit {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 96px;
+    color: var(--ink);
     animation: breathe 1.8s var(--ease-in-out) infinite;
+  }
+
+  .orbit::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--seam-2);
+    border-top-color: var(--signal);
+    animation: spin 1.4s linear infinite;
   }
 
   .fault h1 {
@@ -332,6 +377,12 @@
   .fault code {
     font-family: var(--mono);
     color: var(--signal);
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   @keyframes breathe {
