@@ -10,8 +10,8 @@ MITRE ATT&CK Enterprise verisini kullanarak tehdit aktörlerinin davranışsal p
 
 Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır. **Dört modülün tamamı çalışır durumdadır:** ATT&CK ingest, IDF ağırlıklandırma / benzerlik / kümeleme / sorgu, başarım testi ve Streamlit arayüzü.
 
-| Bileşen | Dosya | Durum |
-|---|---|---|
+| Bileşen | Dosya |
+|---|---|
 | Ortak veri modeli | `ttp_similarity/schema.py` |
 | Dosya yolları / workspace | `ttp_similarity/paths.py` |
 | Ayarlar ve eşikler | `ttp_similarity/config.py` |
