@@ -289,6 +289,15 @@ Uçtan uca senaryolar Chromium tabanlı bir tarayıcıyı (Edge / Chrome / Chrom
 
 CI (`.github/workflows/ci.yml`) her push'ta Python 3.11 testlerini, arayüz testleri ve derlemesini ve Docker imaj derlemesini çalıştırır.
 
+### Marka varlıkları
+
+Amblem ve kelime logosunun kaynakları `docs/brand/source/` altındadır. Arayüzdeki vektör yollar (`web/src/lib/brand.js`), favicon'lar ve README logoları bu kaynaklardan tek komutla üretilir; çıktı birebir tekrarlanabilir:
+
+```bash
+pip install pillow potracer
+python tools/brand/build_brand.py
+```
+
 ---
 
 ## Veri kaynağı
@@ -322,7 +331,8 @@ ttp-similarity-engine/
 │   ├── src/lib/             # durum, API istemcisi, ayrıştırma, arama, geometri, marka yolları
 │   └── e2e/                 # uçtan uca senaryolar
 ├── tests/                   # pytest
-├── docs/                    # marka ve ekran görüntüleri
+├── docs/                    # marka (kaynak PNG + vektör), ekran görüntüleri
+├── tools/brand/             # kaynak logolardan bütün marka varlıklarını üretir
 ├── data/                    # üretilen veri (git'e girmez)
 ├── outputs/                 # raporlar (git'e girmez)
 ├── Dockerfile               # Node derleme + Python 3.11 çalışma imajı

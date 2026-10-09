@@ -164,7 +164,10 @@ def check_python(results):
             "(README.md > Kurulum)." % required
         )
 
-    if not in_venv:
+    in_container = os.path.exists("/.dockerenv") or os.environ.get("container") is not None
+    if in_container:
+        print("  not          : kapsayici icinde calisiyor, sanal ortam gerekmez")
+    elif not in_venv:
         print("  not          : %s - sanal ortam aktif degil, sistem Python'u kullaniliyor" % WARN)
         results.warn("Sanal ortami aktive edin (.venv\\Scripts\\Activate.ps1 / source .venv/bin/activate).")
 
@@ -252,6 +255,9 @@ def check_package(results):
 
     if storage.engine_exists(workspace):
         print("  motor artefakt  %s" % OK)
+    else:
+        print("  motor artefakt  %s - henuz uretilmemis" % WARN)
+        results.warn("python -m ttp_similarity.engine.build --dataset attck")
 
     web_index = os.path.join(REPO_ROOT, "web", "dist", "index.html")
     if os.path.exists(web_index):
@@ -259,9 +265,6 @@ def check_package(results):
     else:
         print("  arayuz derlemesi %s - web/dist yok" % WARN)
         results.warn("cd web && npm ci && npm run build")
-    else:
-        print("  motor artefakt  %s - henuz uretilmemis" % WARN)
-        results.warn("python -m ttp_similarity.engine.build --dataset attck")
 
 
 def main():
