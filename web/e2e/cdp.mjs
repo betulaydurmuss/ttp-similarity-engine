@@ -81,8 +81,8 @@ export async function launch() {
     async type(text) {
       await page('Input.insertText', { text });
     },
-    async shot(path, full = false) {
-      const params = { format: 'png' };
+    async shot(path, full = false, format = 'png', quality = 88) {
+      const params = format === 'png' ? { format } : { format, quality };
       if (full) {
         const { cssContentSize } = await page('Page.getLayoutMetrics');
         params.captureBeyondViewport = true;

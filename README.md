@@ -1,274 +1,306 @@
-# ttp-similarity-engine
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/yildiz-lockup-dark.svg">
+    <img src="docs/brand/yildiz-lockup-light.svg" alt="YILDIZ CTI" width="300">
+  </picture>
+</p>
 
-MITRE ATT&CK Enterprise verisini kullanarak tehdit aktörlerinin davranışsal parmak izini çıkaran, aktörler arası benzerliği ölçen ve verilen bir TTP setinin hangi aktörlere benzediğini güven seviyesiyle birlikte raporlayan bir CTI analiz aracı.
+<h1 align="center">TTP Benzerlik İstasyonu</h1>
 
-> **Bu araç attribution (faillik atfı) yapmaz.** Yalnızca davranışsal benzerlik ölçer. Bir sorgunun bir aktöre benzemesi, o aktörün sorumlu olduğu anlamına gelmez; yalnızca raporlanmış ATT&CK tekniklerinin örtüştüğünü gösterir. Sonuçlar, açık kaynak raporlamanın kapsam ve yanlılığından doğrudan etkilenir.
+<p align="center">
+  Olayda gözlenen MITRE ATT&CK tekniklerini bilinen tehdit aktörleriyle <b>davranışsal benzerlik</b> üzerinden karşılaştıran,<br>
+  sonucu kanıtıyla ve ölçülmüş güveniyle gösteren bir CTI analiz istasyonu.
+</p>
+
+> **Bu araç attribution (faillik atfı) yapmaz.** Yalnızca davranışsal benzerlik ölçer. Bir sorgunun bir aktöre benzemesi, o aktörün sorumlu olduğu anlamına gelmez; yalnızca raporlanmış ATT&CK tekniklerinin örtüştüğünü gösterir. Sonuçlar açık kaynak raporlamanın kapsam ve yanlılığından doğrudan etkilenir.
+
+![İstasyon — gözlem ekranı](docs/screens/istasyon-gozlem.webp)
 
 ---
 
-## Durum
+## İçindekiler
 
-Modüller arası arayüzler, veri formatları ve dosya sözleşmesi tamamlanmıştır. **Dört modülün tamamı çalışır durumdadır:** ATT&CK ingest, IDF ağırlıklandırma / benzerlik / kümeleme / sorgu, başarım testi ve Streamlit arayüzü.
+- [Ne yapar](#ne-yapar)
+- [Hızlı başlangıç](#hızlı-başlangıç)
+- [İstasyon arayüzü](#istasyon-arayüzü)
+- [API](#api)
+- [Motor: ağırlık, benzerlik, güven](#motor-ağırlık-benzerlik-güven)
+- [Başarım testi](#başarım-testi)
+- [Testler ve CI](#testler-ve-ci)
+- [Veri kaynağı](#veri-kaynağı)
+- [Dizin yapısı](#dizin-yapısı)
+- [Ekip için: modüller arası sözleşme](#ekip-için-modüller-arası-sözleşme)
+- [Sınırlılıklar](#sınırlılıklar)
 
-| Bileşen | Dosya |
+---
+
+## Ne yapar
+
+İstasyonun bütün tasarımı üç fikre dayanır; arayüz bunları okutmaz, yaşatır:
+
+1. **Nadir davranış iz bırakır.** Herkesin kullandığı teknik kimseyi işaret etmez. Her teknik IDF ile ağırlıklandırılır: az aktörde görülen teknik ağır, yaygın teknik hafif basar.
+2. **Benzerlik bir mesafedir.** Her aktör, raporlanmış tekniklerinin oluşturduğu uzayda bir noktadır. Gözlem bu uzaya düşer ve en yakın komşuları sıralanır.
+3. **Benzerlik, faillik değildir.** İstasyon "bu odur" demez; "en çok buna benziyor" der ve ne kadar emin olduğunu üç bileşenli, ölçülmüş bir güven skoruyla açıkça söyler.
+
+| | |
 |---|---|
-| Ortak veri modeli | `ttp_similarity/schema.py` |
-| Dosya yolları / workspace | `ttp_similarity/paths.py` |
-| Ayarlar ve eşikler | `ttp_similarity/config.py` |
-| Disk okuma/yazma katmanı | `ttp_similarity/storage.py` |
-| Python sürüm koruması | `ttp_similarity/pyversion.py` |
-| STIX indirme / ayrıştırma / normalizasyon | `ttp_similarity/data/*` |
-| 15 aktörlük sahte veri seti | `ttp_similarity/data/mock_dataset.py` |
-| Frekans tablosu üretimi | `ttp_similarity/data/frequency.py` |
-| IDF ağırlıklandırma | `ttp_similarity/engine/weighting.py` |
-| Vektör uzayı oluşturma | `ttp_similarity/engine/vectorize.py` |
-| Aktörler arası benzerlik matrisi | `ttp_similarity/engine/similarity.py` |
-| Davranışsal kümeleme | `ttp_similarity/engine/clustering.py` |
-| Güven skoru (rarity / margin / sufficiency) | `ttp_similarity/engine/confidence.py` |
-| TTP sorgu modu ve `rank_actors()` | `ttp_similarity/engine/query.py` |
-| Motor build pipeline | `ttp_similarity/engine/build.py` |
-| Motor artefakt yükleyici | `ttp_similarity/engine/loading.py` |
-| Örnekleme ve metrikler | `ttp_similarity/evaluation/{sampling,metrics}.py` |
-| Başarım testi döngüsü | `ttp_similarity/evaluation/benchmark.py` |
-| Vaka çalışması üreteci | `ttp_similarity/evaluation/case_study.py` |
-| Streamlit arayüzü (3 ekran, koyu konsol) | `ttp_similarity/app/{streamlit_app,views,theme,plots}.py` |
+| **Veri** | MITRE ATT&CK Enterprise **v19.2** · 149 aktör · 203 teknik · 3.667 raporlanmış gözlem |
+| **Motor** | Smoothed IDF · kosinüs benzerliği · kapsam düzeltmesi · aglomeratif kümeleme · MDS haritası |
+| **İstasyon** | FastAPI + Svelte; çevrimdışı çalışır, CDN kullanmaz |
+| **Ölçülmüş başarım** | İlk sırada doğru aktör: referans %98,7 · seyrek sorgu %93,9 · gürültülü sorgu %68,4 |
+
+---
+
+## Hızlı başlangıç
+
+### Docker ile (önerilen, tek komut)
+
+```bash
+docker compose up --build
+```
+
+Tarayıcıda **http://localhost:8000** adresini açın. İlk açılışta ATT&CK v19.2 paketi indirilir (~54 MB) ve motor derlenir (~1 dakika); `data/` klasörü host ile paylaşıldığı için bu yalnızca bir kez olur.
+
+Güven ekranını besleyen ölçümleri de üretmek için (isteğe bağlı, birkaç dakika):
+
+```bash
+docker compose --profile setup run --rm setup
+```
+
+### Yerel kurulum
+
+> **Python 3.11 zorunludur** ("3.11 ve üstü" değil; bkz. `DECISIONS.md` §10). Arayüzü derlemek için **Node 22.12+** gerekir (CI ve Docker: Node 24).
+
+```bash
+# 1) Python ortamı
+python3.11 -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python check_setup.py                  # her şey yolunda mı?
+
+# 2) Arayüzü derle
+cd web && npm ci && npm run build && cd ..
+
+# 3) İstasyonu başlat (veri yoksa indirip derler)
+python -m ttp_similarity.api --auto-build
+```
+
+**http://127.0.0.1:8000** — API başvurusu: **/api/docs**
+
+<details>
+<summary>Adım adım derleme ve geliştirme modu</summary>
+
+```bash
+python -m ttp_similarity.data.build --dataset attck            # ATT&CK'i indir ve normalize et
+python -m ttp_similarity.engine.build --dataset attck          # ağırlık, vektör, benzerlik, küme, harita
+python -m ttp_similarity.evaluation.benchmark --dataset attck --regimes   # Güven ekranı için ölçümler
+python -m ttp_similarity.api                                   # http://127.0.0.1:8000
+```
+
+Arayüz üzerinde çalışırken iki terminal:
+
+```bash
+python -m ttp_similarity.api           # API: 8000
+cd web && npm run dev                  # arayüz: http://localhost:5173 (API'ye proxy'ler)
+```
+</details>
+
+<details>
+<summary>Python 3.11 kurulu değilse</summary>
+
+- **Windows:** [python.org](https://www.python.org/downloads/windows/) üzerinden 3.11 serisini kurun ("Add to PATH" ve "py launcher" işaretli). Doğrulama: `py -3.11 -V`; ortam: `py -3.11 -m venv .venv`.
+- **Ubuntu / Debian:** `sudo apt install python3.11 python3.11-venv` (depoda yoksa `deadsnakes` PPA).
+- **macOS:** `brew install python@3.11`
+- **pyenv:** depodaki `.python-version` sürümü otomatik seçer: `pyenv install 3.11`.
+
+`python check_setup.py` yanlış yorumlayıcıda da çalışır ve ne yapılması gerektiğini numaralı liste hâlinde söyler.
+</details>
+
+---
+
+## İstasyon arayüzü
+
+<p align="center"><img src="docs/screens/yildiz-atesleme.webp" alt="YILDIZ açılış sahnesi" width="720"></p>
+
+**Açılış.** YILDIZ amblemi ateşle oluşur: yıldız bir kıvılcımdan dönerek doğar, hilal-kartal silueti alev koronasıyla çizilir, harfler yükselir. Ardından amblem ve yazı arayüzdeki gerçek yerlerine süzülerek iner ve logonun yıldızı 149 aktör yıldızına patlar. Sahne veriyi beklemez; oturumdaki ilk açılışta tam (~3,9 sn), yenilemede ve paylaşılan bağlantıda kısa (~2,3 sn) oynar, her an `Esc` ile atlanabilir, azaltılmış hareket tercihine uyar.
+
+| Gözlem | Zayıf sinyal |
+|---|---|
+| ![Gözlem](docs/screens/istasyon-gozlem.webp) | ![Zayıf sinyal](docs/screens/istasyon-zayif-sinyal.webp) |
+| Nadir teknikler girildiğinde sonda haritada bir komşuluğa düşer, güven **YÜKSEK**. | Yaygın tekniklerle neredeyse herkes ışır; ayrışma düşer, başlık "bu sinyal bir karar için zayıf" der. |
+
+| Harita | Güven |
+|---|---|
+| ![Harita](docs/screens/istasyon-harita.webp) | ![Güven](docs/screens/istasyon-guven.webp) |
+| 149 aktör benzerlik uzayındaki gerçek konumlarında; takımyıldızlar, onları tanımlayan tekniklerle adlandırılmış. | İstasyonun ölçülmüş isabeti, güven etiketinin kalibrasyonu ve dürüst zaafları. |
+
+### Ekranlar ve akışlar
+
+| | |
+|---|---|
+| **Gözlem** | Teknikleri kimlik ya da adla ara, listeyi tek seferde yapıştır veya 15 taktik sütunlu ATT&CK matrisinden seç. Her teknik nadirliği kadar ağır iner; yeterlilik göstergesi kaç teknik daha gerektiğini söyler. |
+| **Yörünge** | Güven seviyesine göre dil değiştiren başlık, üç halkalı güven kadranı (nadirlik · ayrışma · yeterlilik, eşik çizgileriyle), her yeni teknikte canlı yeniden sıralanan adaylar ve 1. ile 2. aday arasındaki ayrışma. |
+| **Aktör dosyası** | Takma adlar, takımyıldız, "neden aday?" kanıt payları, aktörde görülmeyen sorgu teknikleri, taktik ayak izi, en ayırt edici teknikler ve en yakın komşular. |
+| **Karşılaştırma** | İki aktörün yalnız-A / ortak / yalnız-B teknikleri; ortak tekniklerin ortalama nadirliği benzerliğin nereden geldiğini söyler. |
+| **Kör test** | Gizli bir aktörün tekniklerinin %40'ı sorulur (isteğe bağlı gürültüyle); istasyonun onu bulup bulamadığını kendin gör. |
+| **Gürültü enjeksiyonu** | Sorguya yaygınlığa göre seçilmiş yabancı teknikler eklenir; hangi sonucun ayakta kaldığı izlenir (benchmark'taki rejim C'nin canlı hâli). |
+| **Paylaş ve dışa aktar** | Durum URL'de taşınır (bağlantıyı kopyala), Markdown özet, ATT&CK Navigator katmanı, JSON. |
+
+### Klavye
+
+| Tuş | İşlev |
+|---|---|
+| `/` | Teknik aramasına odaklan |
+| `M` | ATT&CK matrisini aç / kapat |
+| `F` | Odak modu: paneller gizlenir, harita tam ekran |
+| `Esc` | Açık katmanı kapat (matris → karşılaştırma → dosya → odak modu); açılış sahnesini atla |
+| `Enter` | Girişten gözleme geç; arama kutusunda öneriyi ya da yapıştırılan listeyi ekle |
+
+### Esnek düzen
+
+| Kademe | Genişlik | Düzen |
+|---|---|---|
+| Telefon | < 640 px | Tek sütun, ikonlu alt gezinti, sonuca götüren hap, dosya açılınca otomatik kaydırma |
+| Tablet | 640–959 px | Harita üstte, Gözlem ve Yörünge yan yana |
+| Dizüstü | 960–1279 px | Harita ortada, daralan paneller, odak modu |
+| Masaüstü | ≥ 1280 px | Harita ortada, geniş paneller; ≥ 1680 px'te daha da geniş |
+
+<p align="center"><img src="docs/screens/istasyon-telefon.webp" alt="Telefon görünümü" width="260"></p>
+
+Metin renkleri her zeminde WCAG AA'yı geçer, klavye odağı her zaman görünür, dokunmatik hedefler en az 36–44 px'tir, fontlar ve kütüphaneler pakete gömülüdür.
+
+---
+
+## API
+
+İstasyon tek süreçtir: `/api/*` JSON döner, geri kalan yollar derlenmiş arayüzü sunar. Etkileşimli başvuru: **http://127.0.0.1:8000/api/docs**
+
+| Uç nokta | Ne verir |
+|---|---|
+| `GET /api/station` | Arayüzün açılış verisi: veri seti bilgisi, skorlama ayarları, taktikler, teknikler (nadirlik ısısıyla), aktörler (harita konumuyla), takımyıldızlar |
+| `POST /api/query` | `{"techniques": [...] \| "yapıştırılmış metin", "top_k": 10}` → adaylar, kanıt payları, güven bileşenleri, sondanın harita konumu, skor alanı |
+| `GET /api/actors/{id}` | Aktör dosyası |
+| `GET /api/compare?a=&b=` | İki aktörün ortak ve ayrık teknikleri, benzerlik, Jaccard |
+| `POST /api/noise` | Sorguya eklenecek, yaygınlığa göre seçilmiş yabancı teknikler |
+| `POST /api/blind` | Kör test vakası |
+| `GET /api/trust` | Benchmark rejim sonuçları (üretildiyse) |
+| `GET /api/health` | Sağlık kontrolü |
+
+```bash
+curl -s localhost:8000/api/query -H 'Content-Type: application/json' \
+  -d '{"techniques": "T1197 T1534 T1559 T1595 T1572 T1586", "top_k": 3}'
+```
+
+Girdiler sınırlandırılmıştır (sorgu başına en fazla 400 teknik, `top_k` 1–50, aktör kimliği deseni), yanıtlar CSP ve güvenlik başlıklarıyla döner.
+
+**Python'dan:**
+
+```python
+from ttp_similarity.engine import rank_actors
+
+for r in rank_actors(["T1566", "T1059", "T1078", "T1003"], top_k=5):
+    print(f"{r['actor_name']:<24} skor={r['similarity_score']:.3f}  "
+          f"eşleşen={r['match_count']}  kapsam={r['technique_coverage']:.0%}  "
+          f"güven={r['confidence_level']}")
+```
+
+`confidence_*` alanları sorgunun bütününü (1. adayın diğerlerinden ne kadar ayrıştığını) anlatır; her satırda aynıdır.
+
+**Komut satırından:**
+
+```bash
+python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003
+python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --json
+```
+
+---
+
+## Motor: ağırlık, benzerlik, güven
+
+| Adım | Dosya | Çıktı |
+|---|---|---|
+| 1 | `engine/weighting.py` | `weights.csv` — smoothed IDF |
+| 2 | `engine/vectorize.py` | `vector_space.npz` — L2 normalize ağırlıklı aktör vektörleri |
+| 3 | `engine/similarity.py` | `similarity.npz` — aktörler arası kosinüs |
+| 4 | `engine/clustering.py` | `clusters.csv` — aglomeratif kümeler (ortalama bağlantı) |
+| 5 | `engine/layout.py` | `layout.csv` — metrik MDS ile 2-B harita |
+| 6 | `engine/query.py` | sorgu, kapsam düzeltmesi, kanıt |
+| 7 | `engine/confidence.py` | üç bileşenli güven |
+
+**Ağırlık.** `w(t) = ln((N + 1) / (df(t) + 1)) + 1`. Taban 1 sayesinde yaygın bir teknik sıfıra düşmez; tavan analitik olarak sınırlıdır, tek bir nadir eşleşme skoru ezemez.
+
+**Skor.** Kosinüs, aktörün sorguyu kapsama oranıyla çarpılır (`COVERAGE_CORRECTION`): birkaç ağır eşleşmeyle sorgunun çoğunu görmezden gelen aktör cezalandırılır.
+
+**Kanıt.** Her eşleşen tekniğin payı skorun gerçek ayrışımıdır: kosinüste `w²` ile orantılı; paylar skoru birebir yeniden üretir.
+
+**Güven** bir olasılık değildir; sıralamanın ne kadar dayanaklı olduğunu üç bileşenle ölçer:
+
+| Bileşen | Sorduğu soru | Ağırlık |
+|---|---|---|
+| **Nadirlik** | Eşleşen teknikler ayırt edici mi? (veriden, skorlama şemasından bağımsız) | 0,40 |
+| **Ayrışma** | 1. aday tüm sıralamadaki 2. adaydan gerçekten ayrışıyor mu? (`top_k`'dan bağımsız) | 0,35 |
+| **Yeterlilik** | Karar vermeye yetecek kadar teknik var mı? (3 → 12) | 0,25 |
+
+Toplam ≥ 0,70 **YÜKSEK**, ≥ 0,45 **ORTA**, altı **DÜŞÜK**; 3'ten az bilinen teknikle her zaman DÜŞÜK. Tanınmayan kimlikler sessizce atılmaz, ayrıca raporlanır. Bütün eşikler `config.py`'de, gerekçeleri `DECISIONS.md`'dedir.
+
+---
+
+## Başarım testi
+
+Bilinen bir aktörün tekniklerinin bir kısmı saklanır, kalanı yeni bir olaymış gibi sorulur; doğru aktörün kaçıncı sırada çıktığına bakılır. Aktör başına 20 tekrar, sabit tohum.
+
+```bash
+python -m ttp_similarity.evaluation.benchmark --dataset attck             # tek koşu
+python -m ttp_similarity.evaluation.benchmark --dataset attck --regimes   # üç zorluk rejimi
+python -m ttp_similarity.evaluation.benchmark --dataset attck --compare   # şema / eşik / kapsam karşılaştırması
+python -m ttp_similarity.evaluation.case_study --dataset attck --actor G0065
+```
+
+| Rejim | Sorgu | top-1 (IDF) | top-3 | Iska |
+|---|---|---:|---:|---:|
+| A — referans | tekniklerin %50'si | %98,7 | %99,8 | 1 |
+| B — seyrek | %25 | %93,9 | %98,6 | 1 |
+| C — gürültülü | %25 + %30 yabancı teknik | %68,4 | %89,8 | 29 |
+
+Gürültülü rejimde IDF ağırlıklandırma, ağırlıksız sürümü 63 aktörde geçer, 20 aktörde geride kalır (eşleştirilmiş Wilcoxon, p = 1,7×10⁻⁵). Güven etiketi kalibredir: rejim C'de YÜKSEK dediğinde %95, DÜŞÜK dediğinde %30 isabet.
+
+Bayraklar: `--scheme smooth_idf|plain_idf|binary` · `--metric cosine|jaccard` · `--min-techniques` · `--coverage-correction / --no-coverage-correction` · `--fraction` · `--repeats` · `--seed`. Çıktılar `outputs/reports/<veri-seti>/` altına CSV ve okunur metin rapor olarak yazılır.
+
+> Sorgular motorun indekslediği aynı ATT&CK kayıtlarından çekilir; ölçülen şey **erişim tutarlılığıdır**, gerçek dünya faillik doğruluğu değil.
+
+---
+
+## Testler ve CI
+
+```bash
+pytest                         # 155 test: motor, API, sözleşme, bütünlük, sürüm sabitleme
+cd web && npm test             # 39 birim testi: ayrıştırma, arama, URL durumu, geometri, uçuş, dışa aktarma
+cd web && npm run e2e          # 25 uçtan uca senaryo (istasyon çalışırken, gerçek ATT&CK verisiyle)
+```
+
+Uçtan uca senaryolar Chromium tabanlı bir tarayıcıyı (Edge / Chrome / Chromium ya da `CHROME_PATH`) DevTools protokolüyle sürer. Kapsananlar:
+
+- Açılış sahnesinin tam, kısa ve atlanmış hâlleri ve logonun yerine inmesi
+- Sorgu, matris, aktör dosyası ve karşılaştırma
+- Odak modu ve harita araması
+- Güven ekranı, kör test ve gürültü enjeksiyonu
+- Telefon düzeni
+- Konsol hatası olmaması
+
+CI (`.github/workflows/ci.yml`) her push'ta Python 3.11 testlerini, arayüz testleri ve derlemesini ve Docker imaj derlemesini çalıştırır.
 
 ---
 
 ## Veri kaynağı
 
-**MITRE ATT&CK Enterprise, STIX 2.1 paketi.**
+**MITRE ATT&CK Enterprise, STIX 2.1** — `https://raw.githubusercontent.com/mitre-attack/attack-stix-data/v19.2/enterprise-attack/enterprise-attack.json`
 
-- Kaynak: `https://raw.githubusercontent.com/mitre-attack/attack-stix-data/<sürüm>/enterprise-attack/enterprise-attack.json`
-- URL ve sürüm `ttp_similarity/config.py` içindeki `ATTACK_RELEASE` / `ATTACK_STIX_URL` ile yönetilir.
-- Kullanılan nesneler:
-  - `intrusion-set` → tehdit aktörü (ATT&CK grup kimliği, ör. `G0016`)
-  - `attack-pattern` → teknik / alt teknik (ör. `T1059`, `T1059.003`)
-  - `relationship` (`relationship_type == "uses"`) → aktör → teknik ilişkisi
-- Alt teknikler ana tekniğe indirgenir (`T1059.003` → `T1059`). Gerekçesi `DECISIONS.md` içinde.
-- İndirilen paket `data/raw/` altında önbelleğe alınır; sonraki tüm aşamalar diskten okur, yani boru hattı çevrimdışı tekrarlanabilir.
-
-**Son build (ATT&CK Enterprise v19.2, 2026-09-07):** 149 aktör, 203 teknik, 3.667 aktör-teknik ilişkisi. Ayrıntılı sayımlar `data/processed/attck/build_stats.json` içinde.
+- Sürüm `config.ATTACK_RELEASE = "v19.2"` ile **sabitlenmiştir**; aynı kod her zaman aynı paketi indirir.
+- `intrusion-set` → aktör, `attack-pattern` → teknik, `relationship (uses)` → aktör-teknik ilişkisi.
+- Alt teknikler ana tekniğe indirgenir (`T1059.003` → `T1059`); revoked/deprecated nesneler ve 5'ten az tekniği olan aktörler elenir; takma adı paylaşan kayıtlar birleştirilir.
+- Paket `data/raw/` altında önbelleğe alınır; yanına kaynak URL, indirme zamanı, ETag ve SHA-256 içeren `enterprise-attack.meta.json` yazılır.
 
 MITRE ATT&CK içeriği MITRE tarafından [ATT&CK Terms of Use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/) kapsamında sağlanır.
-
----
-
-## Kurulum
-
-> **Python 3.11 zorunludur.** "3.11 ve üstü" değil, tam olarak **3.11.x**. 
-
-Aşağıdaki komutlar **depo kökünde** çalıştırılır. Herkes birebir aynı komutları çalıştırmalıdır.
-
-### Windows (PowerShell)
-
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python check_setup.py
-```
-
-> PowerShell "execution policy" hatası verirse, aynı oturum için:
-> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
-> Alternatif olarak `cmd.exe` kullanılıyorsa aktivasyon komutu: `.venv\Scripts\activate.bat`
-
-### macOS / Linux
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python check_setup.py
-```
-
-### Kurulumu doğrulama
-
-Her iki platformda da tek komut:
-
-```bash
-python check_setup.py
-```
-
-Bu betik sırasıyla şunları kontrol eder ve özet basar:
-
-1. **Python sürümü** — `.python-version` içindeki sabitle karşılaştırır, sanal ortamın aktif olup olmadığını söyler.
-2. **Bağımlılıklar** — `requirements.txt` içindeki her paketi kurulu sürümüyle karşılaştırır (beklenen / bulunan / durum tablosu).
-3. **Kritik importlar** — paket kurulu görünse bile gerçekten import edilebiliyor mu (bozuk wheel, yanlış mimari).
-4. **Proje paketi** — `ttp_similarity` import ediliyor mu, mock veri seti ve motor artefaktları üretilmiş mi.
-
-Her şey yolundaysa çıkış kodu `0`, bir sorun varsa `1` döner ve **ne yapılması gerektiğini** numaralı liste hâlinde yazar. Betik yalnızca standart kütüphaneyi kullanır ve **yanlış Python sürümünde de çalışır** — zaten ilk bulgusu bu olur.
-
-### Python 3.11 kurulu değilse
-
-**Windows**
-[python.org/downloads/windows](https://www.python.org/downloads/windows/) adresinden **Python 3.11** serisinin son sürümünü indirin (64-bit installer). Kurulumda **"Add python.exe to PATH"** ve **"py launcher"** seçeneklerini işaretleyin. Kurulum sonrası doğrulama:
-
-```powershell
-py -0p          # kurulu tüm sürümleri listeler, 3.11 görünmeli
-py -3.11 -V
-```
-
-**Ubuntu / Debian**
-```bash
-sudo apt update
-sudo apt install python3.11 python3.11-venv
-python3.11 -V
-```
-Depoda 3.11 yoksa: `sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt update` ardından yukarıdaki kurulum.
-
-**Fedora / RHEL**
-```bash
-sudo dnf install python3.11
-```
-
-**macOS (Homebrew)**
-```bash
-brew install python@3.11
-python3.11 -V
-```
-
-**pyenv (her platform)** — depoda `.python-version` dosyası bulunduğu için dizine girildiğinde sürüm otomatik seçilir:
-```bash
-pyenv install 3.11
-pyenv local 3.11     # .python-version zaten mevcut, doğrulamak için
-python -V
-```
-
-### Notlar
-
-- Ek altyapı yoktur: veritabanı veya harici servis gerekmez. Tüm ara çıktılar diske dosya olarak yazılır. Docker isteğe bağlıdır — sanal ortam kurmak yerine tercih edilebilir (bkz. [Docker ile Çalıştırma](#docker-ile-çalıştırma-önerilen)).
-- `requirements.txt` içindeki sürümler `==` ile sabitlenmiştir ve **Python 3.11'e karşı çözülmüştür**. Daha yeni bir Python'da kurulu olan sürümleri buraya kopyalamayın: örneğin `numpy 2.5.x` ve `scipy 1.18.x` için Python 3.11 wheel'i yoktur.
-- Sanal ortam klasörü (`.venv/`) ve üretilen tüm veri dosyaları `.gitignore` içindedir; `.python-version` ise **bilerek versiyonlanır**.
-
----
-
-## Docker ile Çalıştırma (Önerilen)
-
-Sanal ortam kurmaya gerek kalmadan Docker ile çalıştırabilirsiniz. Python 3.11 zorunluluğu imaj içinde karşılanır.
-
-### Gereksinimler
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS / Linux)
-
-### Hızlı Başlangıç
-
-```powershell
-# 1) İmajı inşa et ve Streamlit'i başlat
-docker compose up --build
-
-# Tarayıcıda aç: http://localhost:8501
-```
-
-Veri ve çıktı dosyaları `data/` ve `outputs/` klasörlerine yazılır — Docker container kaldırılsa bile kaybolmaz.
-
-### İlk Çalıştırma: Mock Veri Seti + Engine Build
-
-Streamlit'i açmadan önce veri setinin oluşturulması gerekir:
-
-```powershell
-# Mock veri seti oluştur + engine artefaktlarını derle
-docker compose --profile setup run --rm setup
-
-# Ardından arayüzü başlat
-docker compose up app
-```
-
-### Gerçek ATT&CK Verisi ile Çalıştırma
-
-```powershell
-# ATT&CK Enterprise STIX paketini indir ve işle (~54 MB, ilk seferinde)
-docker compose run --rm app python -m ttp_similarity.data.build --dataset attck
-
-# Engine artefaktlarını oluştur
-docker compose run --rm app python -m ttp_similarity.engine.build --dataset attck
-
-# Arayüzü başlat
-docker compose up app
-```
-
-### CLI Komutları (Container İçinde)
-
-```powershell
-# Sorgu çalıştır
-docker compose run --rm app python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
-
-# Başarım testi
-docker compose run --rm app python -m ttp_similarity.evaluation.benchmark --dataset mock
-
-# Kurulum doğrulama
-docker compose run --rm app python check_setup.py
-
-# pytest
-docker compose run --rm app pytest
-```
-
----
-
-## Çalıştırma
-
-Komutlar depo kökünden, **sanal ortam aktifken** çalıştırılır.
-
-```bash
-# 0) Kurulum doğru mu? (her zaman önce bunu çalıştırın)
-python check_setup.py
-
-# 1) Sahte veri seti (gerçek ATT&CK verisi olmadan denemek için)
-python -m ttp_similarity.data.mock_dataset
-
-# 1b) Gerçek veri seti: ATT&CK Enterprise (ilk çalıştırmada ~54 MB indirir)
-python -m ttp_similarity.data.build --dataset attck
-python -m ttp_similarity.data.build --dataset attck --force-download   # paketi tazele
-
-# 2) Motor artefaktları: ağırlıklar, vektörler, benzerlik matrisi, kümeler ✅
-python -m ttp_similarity.engine.build --dataset mock
-
-# 3) Komut satırından sorgu ✅
-python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock
-
-# 3b) JSON çıktı ✅
-python -m ttp_similarity.engine.query T1566 T1078 T1047 T1003 --dataset mock --json
-
-# 4) Başarım testi ✅
-python -m ttp_similarity.evaluation.benchmark --dataset mock
-
-# 4b) Ağırlık şeması / metrik / eşik karşılaştırmaları ✅
-python -m ttp_similarity.evaluation.benchmark --dataset attck --compare
-
-# 4c) Üç zorluk rejimi: A referans, B seyrek sorgu, C gürültülü sorgu ✅
-python -m ttp_similarity.evaluation.benchmark --dataset attck --regimes
-
-# 4d) Tek aktör için vaka çalışması materyali ✅
-python -m ttp_similarity.evaluation.case_study --dataset attck --actor G0065
-
-# 5) Arayüz
-streamlit run ttp_similarity/app/streamlit_app.py
-
-# Testler ✅
-pytest
-```
-
-### Python API ile kullanım
-
-```python
-from ttp_similarity.engine import rank_actors
-
-# Gözlemlenen teknikleri sorgula
-results = rank_actors(["T1566", "T1059", "T1078", "T1003"], top_k=5)
-
-for r in results:
-    print(f"{r['actor_name']:<24} "
-          f"score={r['similarity_score']:.3f}  "
-          f"confidence={r['confidence_level']}  "
-          f"matched={r['match_count']}")
-    for ev in r["evidence"][:3]:
-        print(f"  ↳ {ev['technique_id']} ({ev['technique_name']}): {ev['contribution']:.1%}")
-```
-
-`--dataset` her komutta aynı anlama gelir: `mock` (sahte veri) veya `attck` (gerçek ATT&CK). İki veri seti aynı dosya sözleşmesini ürettiği için tüm alt modüller ikisiyle de ayrım gözetmeden çalışır.
-
 
 ---
 
@@ -276,238 +308,47 @@ for r in results:
 
 ```
 ttp-similarity-engine/
-├── ttp_similarity/              # kod
-│   ├── schema.py                # ORTAK VERİ MODELİ - önce burayı okuyun
-│   ├── pyversion.py             # Python sürüm koruması (import anında çalışır)
-│   ├── paths.py                 # tüm dosya yolları (Workspace)
-│   ├── config.py                # eşikler, ağırlıklar, ayarlar
-│   ├── storage.py               # diske okuma/yazma
-│   ├── data/                    # aşama 1: ATT&CK -> temiz tablo
-│   ├── engine/                  # aşama 2: ağırlık, vektör, benzerlik, sorgu
-│   ├── evaluation/              # aşama 3: başarım testi
-│   └── app/                     # aşama 4: Streamlit arayüzü (theme.py = tasarım sistemi)
-├── .streamlit/
-│   └── config.toml              # koyu tema; renkler app/theme.py PALETTE ile aynı
-├── data/                        # üretilen veri dosyaları (git'e girmez)
-│   ├── raw/                     # indirilen STIX paketi
-│   ├── interim/                 # ara çıktılar
-│   ├── processed/<veri-seti>/   # MODÜL SÖZLEŞMESİ burada
-│   └── mock/                    # sahte veri setinin ground-truth dosyaları
-├── outputs/
-│   ├── figures/<veri-seti>/     # üretilen grafikler
-│   └── reports/<veri-seti>/     # başarım raporları
-├── tests/
-│   ├── test_contract.py         # modüller arası sözleşme testleri
-│   ├── test_data_pipeline.py    # aşama 1 boru hattı testleri
-│   ├── test_engine.py           # motor modülü birim testleri
-│   ├── test_engine_properties.py# motorun değişmezleri (property testleri)
-│   ├── test_evaluation.py       # örnekleme ve metrik testleri
-│   ├── test_mock_dataset.py     # sahte veri seti testleri
-│   └── test_python_pin.py       # Python sürüm sabiti testleri
-├── Dockerfile                   # Python 3.11 imajı
-├── docker-compose.yml           # `app` servisi + `setup` profili
-├── .dockerignore
-├── check_setup.py               # tek komutla kurulum doğrulama
-├── .python-version              # 3.11 (pyenv sürüm sabiti, versiyonlanır)
-├── pyproject.toml               # requires-python = ">=3.11,<3.12"
-├── requirements.txt             # sürümleri sabitlenmiş bağımlılıklar
+├── ttp_similarity/
+│   ├── schema.py            # ortak veri modeli — önce burayı okuyun
+│   ├── paths.py             # tüm dosya yolları (Workspace)
+│   ├── config.py            # eşikler, ağırlıklar, ayarlar
+│   ├── storage.py           # diske okuma/yazma
+│   ├── data/                # aşama 1: ATT&CK → temiz aktör-teknik tablosu
+│   ├── engine/              # aşama 2: ağırlık, vektör, benzerlik, küme, harita, sorgu, güven
+│   ├── evaluation/          # aşama 3: benchmark, vaka çalışması
+│   └── api/                 # aşama 4: istasyon — FastAPI servisi
+├── web/                     # istasyon arayüzü (Svelte + Vite)
+│   ├── src/components/      # harita, gözlem, yörünge, dosya, karşılaştırma, güven, marka
+│   ├── src/lib/             # durum, API istemcisi, ayrıştırma, arama, geometri, marka yolları
+│   └── e2e/                 # uçtan uca senaryolar
+├── tests/                   # pytest
+├── docs/                    # marka ve ekran görüntüleri
+├── data/                    # üretilen veri (git'e girmez)
+├── outputs/                 # raporlar (git'e girmez)
+├── Dockerfile               # Node derleme + Python 3.11 çalışma imajı
+├── docker-compose.yml
+├── check_setup.py           # tek komutla kurulum doğrulama
+├── requirements.txt         # sabitlenmiş bağımlılıklar
 ├── README.md
-└── DECISIONS.md                 # yöntem, eşik ve terim kararları
+└── DECISIONS.md             # yöntem, eşik ve tasarım kararları
 ```
-
----
-
-## Modüller
-
-Dört modül **paralel geliştirilebilecek** şekilde tasarlandı. Her modülün girdisi ve çıktısı diskteki dosyalardır; hiçbir modül diğerinin bellekteki nesnesine dokunmaz. Bir modül, girdi dosyası henüz üretilmemişse hangi komutun çalıştırılması gerektiğini söyleyen bir hata verir (`storage.require`).
-
-### `data/` — ATT&CK'ten temiz aktör-teknik tablosuna
-
-Yaptığı iş:
-1. ATT&CK Enterprise STIX paketini indirir ve `data/raw/` altında önbelleğe alır.
-2. `intrusion-set`, `attack-pattern` nesnelerini ve aralarındaki `uses` ilişkilerini ayrıştırır.
-3. Alt teknikleri ana tekniklere indirger (`T1059.003` → `T1059`).
-4. Aktör takma adlarını tek kimlik altında birleştirir (bir aktör = bir `actor_id`).
-5. Revoked/deprecated nesneleri ve çok seyrek aktörleri eler.
-6. Temiz aktör-teknik tablosunu ve **her tekniğin kaç aktörde geçtiğini gösteren frekans tablosunu** diske yazar.
-
-Çıktıları (`data/processed/<veri-seti>/`):
-
-| Dosya | İçerik |
-|---|---|
-| `actors.json` | `actor_id`, `name`, `aliases[]`, `technique_ids[]`, `source`, `metadata` |
-| `actor_technique.csv` | `actor_id, actor_name, technique_id, technique_name` (uzun format) |
-| `techniques.csv` | `technique_id, technique_name, tactics` |
-| `technique_frequency.csv` | `technique_id, technique_name, actor_count, actor_ratio` |
-| `manifest.json` | Kaynak, ATT&CK sürümü, üretim zamanı, sayımlar |
-| `build_stats.json` | Elenen nesne sayıları, indirgeme öncesi/sonrası, takma ad birleşmeleri |
-
-İndirilen paketin yanına `data/raw/enterprise-attack.meta.json` yazılır: kaynak URL, indirme zamanı, ETag, boyut, SHA-256 ve ATT&CK sürümü — raporda "şu tarihli şu sürüm kullanıldı" diyebilmek için.
-
-### `engine/` — ağırlıklandırma, benzerlik, kümeleme, sorgu
-
-> **Bu modül tamamen implement edilmiştir.**
-
-Temel fikir: **nadir teknikler ayırt edicidir, yaygın teknikler değildir.** Aktör = doküman, teknik = terim kabul edilir; ATT&CK sayım değil varlık bilgisi verdiği için terim frekansı ikilidir ve tüm sinyal IDF tarafındadır.
-
-#### Pipeline
-
-| Adım | Dosya | Çıktı | Açıklama |
-|---|---|---|---|
-| 1 | `weighting.py` | `weights.csv` | Her tekniğin kaç aktörde geçtiğinden IDF ağırlığı hesaplanır |
-| 2 | `vectorize.py` | `vector_space.npz` | Her aktör, kullandığı tekniklerin IDF ağırlıklarıyla bir vektör olarak temsil edilir |
-| 3 | `similarity.py` | `similarity.npz` | Aktörler arası cosine similarity matrisi üretilir |
-| 4 | `clustering.py` | `clusters.csv` | Agglomerative clustering ile davranışsal kümeler oluşturulur |
-| 5 | `query.py` | — | Kullanıcının verdiği teknik listesi aynı vektör uzayına yansıtılıp aktörlerle karşılaştırılır |
-| 6 | `confidence.py` | — | Sorgu sonucunun güvenilirliği üç bileşenden hesaplanır |
-
-#### IDF formülü
-
-Yaygın tekniklerin etkisini azaltmak, nadir olanların etkisini artırmak için smoothed IDF kullanılır:
-
-```
-idf(t) = ln((N + 1) / (df(t) + 1)) + 1
-```
-
-- `N` = toplam aktör sayısı
-- `df(t)` = tekniği kullanan aktör sayısı
-- `+1` zemin, evrensel bir tekniğin ağırlığını sıfır yerine 1'de tutar
-
-Alternatif şemalar (`plain_idf`, `binary`) `config.WEIGHTING_SCHEME` ile seçilebilir.
-
-#### `rank_actors()` — yüksek seviyeli sorgu API'si
-
-Motor modülü, kullanıcının doğrudan çağırabileceği bir convenience fonksiyonu sunar:
-
-```python
-from ttp_similarity.engine import rank_actors
-
-results = rank_actors(["T1566", "T1059", "T1078", "T1003"], top_k=5)
-
-for r in results:
-    print(f"{r['actor_name']:<24} score={r['similarity_score']:.3f}  "
-          f"confidence={r['confidence_level']}  "
-          f"matched={r['match_count']}/{len(r['matched_techniques'])}")
-```
-
-Her aday için dönen alanlar:
-
-| Alan | Açıklama |
-|---|---|
-| `actor_id` / `actor_name` | Aktör kimliği ve adı |
-| `similarity_score` | Cosine similarity (0–1) |
-| `confidence_score` / `confidence_level` | Güven skoru (0–1) ve etiketi (`high` / `medium` / `low`) |
-| `matched_techniques` | Aktörle eşleşen teknik ID'leri |
-| `match_count` | Eşleşen teknik sayısı |
-| `technique_coverage` | Eşleşen / sorgulanan teknik oranı |
-| `evidence` | Sonucu en fazla etkileyen yüksek-IDF teknikler (contribution payıyla) |
-
-#### Edge case'ler
-
-| Durum | Davranış |
-|---|---|
-| Boş teknik listesi | Boş sonuç, `LOW` confidence |
-| Duplicate teknik ID'leri | Otomatik de-duplicate edilir |
-| Bilinmeyen teknik ID'leri | `unknown_technique_ids` olarak raporlanır, sessizce atılmaz |
-| Tek teknikle sorgu | Çalışır, `sufficiency` düşük olacağından confidence düşer |
-| Hiçbir aktörle eşleşmeyen sorgu | Boş aday listesi, `LOW` confidence |
-| Top-1 ve top-2 çok yakın | `margin` bileşeni düşer → confidence düşer |
-
-#### Güven skoru (confidence)
-
-**Güven skoru üç bileşenden oluşur** (ayrıntı ve eşikler `DECISIONS.md`):
-
-| Bileşen | Sorduğu soru | Ağırlık |
-|---|---|---|
-| **Nadirlik (rarity)** | Eşleşen teknikler ayırt edici mi, yoksa herkeste var mı? | 0.40 |
-| **Fark (margin)** | 1. aday 2. adaydan gerçekten ayrışıyor mu? | 0.35 |
-| **Yeterlilik (sufficiency)** | Karar vermeye yetecek kadar teknik girildi mi? | 0.25 |
-
-Sonuç **yüksek / orta / düşük** olarak etiketlenir. Sorgu çıktısı ayrıca **hangi tekniklerin sonucu belirlediğini** (`evidence`) ve **aday aktörde görülmeyen sorgu tekniklerini** (`missing_technique_ids`) döndürür — açıklanamayan bir sıralama kullanılabilir istihbarat değildir.
-
-> **Güven skoru bir olasılık değildir** ve kesin attribution (faillik atfı) izlenimi vermez. Sistem `"Bu APT29'dur"` değil, `"Gözlemlenen davranış en çok APT29 ile benzerlik gösteriyor"` mantığında çalışır.
-
-### `evaluation/` — başarım testi
-
-Bilinen bir aktörün tekniklerinden rastgele `k` tanesi seçilir, sanki yeni bir olaydan gelmiş gibi sorgu moduna verilir ve doğru aktörün sıralamada nerede çıktığına bakılır. Ölçülenler:
-
-- **top-1 doğruluk** — doğru aktörün ilk sırada çıkma oranı
-- **top-3 doğruluk** — ilk üçte çıkma oranı
-- **MRR** (ortalama karşılıklı sıra)
-- Sorgu boyutuna göre kırılım — "kaç teknik gerekiyor?" sorusunun cevabı
-- **Güven seviyesine göre kırılım** — kalibrasyon kontrolü: `yüksek` etiketli sonuçlar `düşük` etiketlilerden belirgin biçimde daha doğru olmalıdır, aksi halde güven skoru süstür.
-
-#### CLI bayrakları
-
-| Bayrak | Etkisi |
-|---|---|
-| `--dataset` | `mock` veya `attck` |
-| `--compare` | Üç karşılaştırmayı birden çalıştırır: ağırlık şeması, benzerlik metriği, kapsam düzeltmesi |
-| `--regimes` | Üç zorluk rejimini çalıştırır: **A** referans (aktörün tekniklerinin %50'si, gürültüsüz), **B** seyrek sorgu (%25, gürültüsüz), **C** gürültülü sorgu (%25 + yabancı teknik enjeksiyonu). Diğer tüm parametreler sabit tutulur, böylece fark yalnızca zorluktan gelir |
-| `--scheme` | `smooth_idf` / `plain_idf` / `binary` — tek koşu için `config` değerini ezer |
-| `--metric` | `cosine` / `jaccard` |
-| `--min-techniques` | Denemeye alınacak aktörler için asgari teknik sayısı |
-| `--coverage-correction` | Kapsam düzeltmesini açar |
-| `--fraction` / `--repeats` / `--seed` | Örnekleme oranı, aktör başına tekrar, tohum |
-
-#### Çıktılar (`outputs/reports/<veri-seti>/`)
-
-| Dosya | İçerik |
-|---|---|
-| `evaluation.json` | Toplu metrikler: top-1, top-3, MRR, kırılımlar |
-| `evaluation_trials.csv` | Her deneme tek satır — sorgu, doğru aktör, çıkan sıra, güven |
-| `benchmark_report.txt` | Aynı sonuçların okunabilir metin özeti |
-| `by_confidence.csv` | Güven seviyesine göre kırılım (kalibrasyon kontrolü) |
-| `by_technique_count.csv` | Sorgu boyutuna göre kırılım |
-| `comparison_summary.csv` + `trials_<koşul>.csv` | `--compare` çıktısı: şema / metrik / kapsam düzeltmesi karşılaştırması |
-| `confidence_threshold_sweep.csv` | Güven eşiklerinin taranması |
-| `regime_summary.csv`, `regime_report.txt`, `regime_significance.csv`, `regime_trials_*.csv` | `--regimes` çıktısı ve anlamlılık testleri |
-
-`case_study.py` ayrıca seçilen aktör için `case_<aktör-id>/` altına o aktöre ait figür ve tabloları yazar.
-
-> Not: Alt küme, motorun indekslediği aynı ATT&CK kayıtlarından çekilir. Bu nedenle ölçülen şey **erişim tutarlılığıdır**, gerçek dünya attribution doğruluğu değildir.
-
-### `app/` — Streamlit arayüzü
-
-Koyu bir analiz konsolu olarak tasarlanmıştır: sol rayda navigasyon, dolu kart yerine ince çizgiler, tüm teknik kimlikleri ve skorlar monospace. Üç ekran raydan seçilir:
-
-- **Isı haritası** — kümeleme dendrogramına göre sıralanmış aktör-aktör benzerlik matrisi (her zaman bir alt küme: odak aktör + komşuları, elle seçim veya uzayın en yoğun N aktörü) ve görünümdeki en benzer çiftler.
-- **TTP sorgu** — teknik listesi girilir; aday aktörler skor çubuklarıyla, güven paneli üç bileşeni ve zayıf olanın adıyla, her aday için kanıt dökümü ve o aktörde görülmeyen sorgu teknikleri görüntülenir.
-- **Vaka çalışması** — tek aktörün profili: komşuları ve **ortak ağırlık ortalaması** (benzerlik nadir tekniklerden mi emtia tekniklerden mi geliyor), kendi teknikleri ağırlığa göre sıralı.
-
-Modül ayrımı: `streamlit_app.py` kabuk (sayfa ayarı, ray dispatch'i, hata yakalama) · `views.py` ekran başına bir fonksiyon, yalnızca *ne gösterildiği* · `theme.py` tasarım token'ları, stil sayfası ve `st.metric`/`st.dataframe` yerine geçen HTML bileşenleri · `plots.py` matplotlib figürleri (hiç `st.*` çağrısı yok) · `loaders.py` önbellekli disk erişimi.
-
-Tema `.streamlit/config.toml` ile kurulur; oradaki beş renk `theme.PALETTE` ile aynı token'lardır, biri değişirse ikisi birlikte değişir. Heatmap konsolda koyu (`dark=True`), `outputs/figures/` altına kaydedilen rapor figürleri açık kalır.
-
-Arayüzde puanlama mantığı yoktur; her hesap motorda yapılır, böylece CLI ile arayüz aynı sonucu verir.
-
----
-
-## Sahte veri seti
-
-`python -m ttp_similarity.data.mock_dataset` komutu, gerçek veri hazır olmadan engine ve app modüllerinin geliştirilebilmesi için **15 aktörlük sentetik bir veri seti** üretir.
-
-- Teknik kimlikleri ve adları **gerçek** ATT&CK teknikleridir, böylece motorun bugün gördüğü sözlük ile ileride göreceği sözlük aynıdır.
-- Aktör adları **uydurmadır** (`SILENT HERON`, `IRON TIDE`, ...). Hiçbir gerçek tehdit grubuna karşılık gelmez ve istihbarat olarak kullanılamaz.
-- 15 aktör, 3'erli 5 davranışsal aileye yerleştirilmiştir; her aktör ailesinin çekirdek tekniklerinin çoğunu, neredeyse herkeste bulunan yaygın teknikleri ve birkaç rastgele tekniği alır. Bu, gerçekçi bir frekans eğrisi, kümelemenin bulması gereken bir yapı ve güven skorunun `margin` bileşenini zorlayan yakın çiftler üretir.
-- Üretim tohumlanmıştır (`seed`), yani her makinede aynı sonucu verir.
-- Ailelerin ground-truth eşlemesi `data/mock/mock_ground_truth.csv` dosyasına yazılır.
 
 ---
 
 ## Ekip için: modüller arası sözleşme
 
-1. **Önce `ttp_similarity/schema.py` okunur.** Modül sınırını geçen her şey orada tanımlıdır. Yeni bir alan gerekiyorsa önce orası değiştirilir ve diğer iki sahibe haber verilir.
-2. **Dosya yolları elle yazılmaz.** `paths.Workspace.get("mock").weights` kullanılır.
-3. **Dosyalar elle açılmaz.** `storage.*` kullanılır; eksik girdi durumunda kullanıcıya doğru komutu söyleyen hata otomatik gelir.
-4. **Eşik ve sabitler kod içine gömülmez.** Hepsi `config.py` içindedir; değiştirildiğinde `DECISIONS.md` de güncellenir.
-5. `TODO` yorumları sahibiyle etiketlenmiştir: `TODO(data)`, `TODO(engine)`, `TODO(eval)`, `TODO(app)`.
+1. **Önce `ttp_similarity/schema.py` okunur.** Modül sınırını geçen her şey orada tanımlıdır.
+2. **Dosya yolları elle yazılmaz:** `paths.Workspace.get("attck").weights`.
+3. **Dosyalar elle açılmaz:** `storage.*` kullanılır; eksik girdide hangi komutun çalıştırılacağını söyleyen hata gelir.
+4. **Eşik ve sabitler kod içine gömülmez:** hepsi `config.py`'dedir; değiştiğinde `DECISIONS.md` de güncellenir.
+5. **Arayüzde skorlama yapılmaz:** her sayı motordan gelir; API yalnızca motorun çıktısını arayüzün çizdiği şekle getirir.
+6. **Sahte veri seti (`mock`) yalnızca test fixture'ıdır;** arayüzde ve varsayılanlarda kullanılmaz.
 
 ---
 
 ## Sınırlılıklar
 
-- ATT&CK grup kayıtları **açık kaynak raporlamaya** dayanır. Çok yazılmış bir aktörün teknik listesi uzundur; az yazılmış bir aktörünki kısadır. Benzerlik bir ölçüde raporlama yoğunluğunu ölçer.
-- Aktörler zaman içinde davranış değiştirir; ATT&CK kayıtları bu değişimi tarihlendirmez. Model zamansızdır.
-- Farklı aktörlerin aynı sızma araçlarını ve tekniklerini kullanması yaygındır; yüksek benzerlik ortak araç setinden de kaynaklanabilir.
+- ATT&CK grup kayıtları **açık kaynak raporlamaya** dayanır. Çok yazılmış bir aktörün teknik listesi uzun, az yazılmış bir aktörünki kısadır; benzerlik bir ölçüde raporlama yoğunluğunu ölçer. Gürültülü sorguda az belgelenmiş aktörleri bulmak belirgin biçimde zordur (Güven ekranında açıkça gösterilir).
+- Aktörler zaman içinde davranış değiştirir; ATT&CK kayıtları bunu tarihlendirmez, model zamansızdır.
+- Aynı araç setini kullanan farklı aktörler birbirine benzer görünür.
 - Bu araç bir tespit sistemi değildir ve olay müdahale kararlarının tek dayanağı olarak kullanılmamalıdır.
