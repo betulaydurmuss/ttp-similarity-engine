@@ -87,7 +87,7 @@ def main() -> None:
         {
             "veri seti": dataset,
             "att&ck": manifest.get("ATT&CK surumu", "-"),
-            "aktör": manifest.get("Aktör", "-"),
+            "aktör": manifest.get("Aktor", "-"),
             "teknik": manifest.get("Teknik", "-"),
         },
     )
