@@ -227,6 +227,17 @@
     transition: width var(--t-slow) var(--ease-out);
   }
 
+  @container panel (max-width: 400px) {
+    li button {
+      grid-template-columns: 24px minmax(0, 1fr) 48px 34px;
+      gap: 8px;
+    }
+
+    .bar {
+      display: none;
+    }
+  }
+
   @keyframes blink {
     0% {
       opacity: 0;

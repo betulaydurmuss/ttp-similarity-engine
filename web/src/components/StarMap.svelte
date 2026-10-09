@@ -272,7 +272,7 @@
         <line y1={-WORLD * 1.08} y2={WORLD * 1.08} x1="0" x2="0" vector-effect="non-scaling-stroke" />
       </g>
 
-      <g class="constellations" class:visible={settled}>
+      <g class="constellations" class:visible={settled && !hold}>
         {#each shapes as shape (shape.id)}
           {@const active = station.constellationFocus === shape.id}
           {#if shape.path}
@@ -309,7 +309,7 @@
         {/key}
       {/if}
 
-      <path class="hub" d={EMBLEM_BODY} fill-rule="evenodd" transform="translate(-70 -70) scale(1.4)" />
+      <path class="hub" class:held={hold} d={EMBLEM_BODY} fill-rule="evenodd" transform="translate(-70 -70) scale(1.4)" />
 
       <g class="stars" class:held={hold}>
         {#each actors as actor (actor.id)}
@@ -402,9 +402,12 @@
   {/if}
 
   {#if station.result?.candidates?.length}
-    <div class="legend" style:left="{safe.left + 16}px" style:top="{safe.top + 12}px">
-      <span class="legend-probe"></span> gözlemin konumu
-      <span class="legend-beam"></span> en yakın 5 aday · kalınlık = benzerlik
+    {@const room = width - safe.left - safe.right - 32}
+    <div class="legend" style:left="{safe.left + 16}px" style:top="{safe.top + 12}px" style:max-width="{room}px">
+      {#if room > 560}
+        <span class="legend-probe"></span> gözlemin konumu
+        <span class="legend-beam"></span> en yakın 5 aday · kalınlık = benzerlik
+      {/if}
       <span class="mono legend-top">en yüksek {pct(topScore, 1)}</span>
     </div>
   {/if}
@@ -485,6 +488,11 @@
     fill: var(--ink);
     opacity: 0.035;
     pointer-events: none;
+    transition: opacity 1200ms var(--ease-out) 600ms;
+  }
+
+  .hub.held {
+    opacity: 0;
   }
 
   .stars.held {
@@ -701,8 +709,19 @@
   }
 
   .legend-top {
-    margin-left: 10px;
     color: var(--signal);
+  }
+
+  .legend-beam + .legend-top,
+  .legend-beam ~ .legend-top {
+    margin-left: 10px;
+  }
+
+  @media (pointer: coarse) {
+    .ctl {
+      width: 42px;
+      height: 42px;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

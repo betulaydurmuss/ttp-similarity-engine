@@ -274,9 +274,22 @@
     header {
       flex-direction: column;
       align-items: stretch;
+      gap: 12px;
+      padding: 14px 16px 12px;
+    }
+    header p {
+      display: none;
+    }
+    h2 {
+      font-size: 18px;
     }
     .tools {
       flex-wrap: wrap;
+      gap: 10px;
+    }
+    .tools input {
+      flex: 1 1 160px;
+      width: auto;
     }
   }
 </style>

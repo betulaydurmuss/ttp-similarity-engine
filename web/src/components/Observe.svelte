@@ -83,7 +83,8 @@
     font-size: 11.5px;
     letter-spacing: 0.08em;
     color: var(--ink-3);
-    padding: 2px 6px;
+    min-height: 28px;
+    padding: 2px 10px;
     border: 1px solid var(--seam-2);
   }
 
@@ -108,6 +109,12 @@
 
   .tools .btn--ghost {
     border-color: var(--seam-2);
+  }
+
+  @container panel (max-width: 380px) {
+    .tools .kbd {
+      display: none;
+    }
   }
 
   .rejected {

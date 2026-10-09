@@ -27,6 +27,7 @@ class Station {
   toast = $state(null);
   trust = $state(null);
   cameraRequest = $state(0);
+  focus = $state(false);
 
   techniques = $derived(new Map((this.data?.techniques ?? []).map((t) => [t.id, t])));
   actors = $derived(new Map((this.data?.actors ?? []).map((a) => [a.id, a])));

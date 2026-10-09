@@ -1,5 +1,5 @@
 <script>
-  import { onMount, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { Tween, prefersReducedMotion } from 'svelte/motion';
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
@@ -7,7 +7,7 @@
   import Emblem from './brand/Emblem.svelte';
   import Wordmark from './brand/Wordmark.svelte';
 
-  let { data, quick = false, onchoose } = $props();
+  let { data, quick = false, start = true, onchoose } = $props();
 
   let phase = $state(0);
   const instant = untrack(() => quick) || prefersReducedMotion.current;
@@ -21,8 +21,9 @@
     ['Benzerlik, faillik değildir.', '“Bu odur” denmez. “En çok buna benziyor” denir ve ne kadar emin olunduğu açıkça söylenir.']
   ];
 
-  onMount(() => {
-    const steps = instant ? [0, 0, 0, 0] : [80, 700, 1500, 2700];
+  $effect(() => {
+    if (!start) return;
+    const steps = instant ? [0, 0, 0, 0] : [60, 520, 1150, 2100];
     const timers = steps.map((delay, i) =>
       setTimeout(() => {
         phase = i + 1;
@@ -47,10 +48,13 @@
 <section class="arrival" out:fade={{ duration: instant ? 0 : 420 }} aria-labelledby="arrival-title">
   <div class="veil"></div>
   <div class="frame">
-    <div class="brandline eyebrow" class:on={phase >= 1}>
-      <span class="mark"><Emblem size={30} title="YILDIZ CTI" /><Wordmark height={17} /></span>
-      <span>MITRE ATT&CK Enterprise · v{data.dataset.attack_version ?? '?'}</span>
+    <div class="hero" data-brand-slot="arrival">
+      <span class="hero-emblem" data-brand="emblem"><Emblem size={68} title="YILDIZ CTI" /></span>
+      <span class="hero-word" data-brand="word"><Wordmark height={32} /></span>
     </div>
+    <p class="eyebrow source" class:on={phase >= 1}>
+      CTI · MITRE ATT&CK Enterprise v{data.dataset.attack_version ?? '?'}
+    </p>
     <h1 id="arrival-title" class:on={phase >= 1}>
       <span class="line">TTP Benzerlik</span>
       <span class="line accent">İstasyonu</span>
@@ -109,22 +113,30 @@
     max-width: 720px;
   }
 
-  .brandline {
+  .hero {
     display: flex;
     align-items: center;
-    gap: 16px;
-  }
-
-  .brandline .mark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    gap: clamp(12px, 2vh, 18px);
     color: var(--ink);
   }
 
-  .brandline > span:last-child {
-    padding-left: 16px;
-    border-left: 1px solid var(--seam-3);
+  .hero-emblem,
+  .hero-word {
+    display: block;
+  }
+
+  .hero-emblem :global(svg) {
+    width: clamp(48px, 8.4vh, 72px);
+    height: auto;
+  }
+
+  .hero-word :global(svg) {
+    height: clamp(22px, 3.9vh, 34px);
+    width: auto;
+  }
+
+  .source {
+    margin: clamp(10px, 1.8vh, 16px) 0 0;
   }
 
   .eyebrow,
@@ -139,7 +151,7 @@
       translate var(--t-slow) var(--ease-out);
   }
 
-  .eyebrow.on,
+  .source.on,
   h1.on .line,
   .counts.on,
   .principles li.on,
@@ -151,7 +163,7 @@
   h1 {
     margin: clamp(6px, 1.4vh, 14px) 0 clamp(14px, 3vh, 28px);
     font-weight: 300;
-    font-size: clamp(38px, min(6.4vw, 9.6vh), 84px);
+    font-size: clamp(36px, min(6.2vw, 8.6vh), 80px);
     line-height: 0.98;
     letter-spacing: -0.025em;
   }

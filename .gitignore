@@ -47,3 +47,6 @@ outputs/reports/*
 # --- Web interface ---
 web/node_modules/
 web/dist/
+
+# --- E2E artifacts ---
+web/e2e/artifacts/

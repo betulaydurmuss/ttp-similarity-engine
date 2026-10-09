@@ -98,6 +98,7 @@
     flex: 1;
     min-height: 0;
     padding: 16px 20px 20px;
+    container: panel / inline-size;
   }
 
   @media (max-height: 820px) {

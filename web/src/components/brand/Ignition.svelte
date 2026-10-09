@@ -1,48 +1,98 @@
 <script>
   import { onMount } from 'svelte';
-  import { prefersReducedMotion } from 'svelte/motion';
   import { EMBLEM_BODY, EMBLEM_STAR, STAR_CENTER, WORD_LETTERS, WORD_WIDTH } from '../../lib/brand.js';
+  import { flyBrand } from '../../lib/flight.js';
 
-  let { ondone } = $props();
+  let { variant = 'full', ready = false, landing = () => null, onlanded } = $props();
 
-  const calm = prefersReducedMotion.current;
-  const HOLD = calm ? 900 : 3150;
-  const EXIT = calm ? 250 : 560;
-
-  let leaving = $state(false);
-  let finished = false;
-  let timers = [];
-
+  const pace = variant === 'full' ? 1 : variant === 'short' ? 0.55 : 0;
+  const calm = variant === 'calm';
   const [sx, sy] = STAR_CENTER;
+  const embers = Array.from({ length: 18 }, (_, i) => {
+    const r = (n) => {
+      const v = Math.sin((i + 1) * 91.17 + n * 47.3) * 10000;
+      return v - Math.floor(v);
+    };
+    return { x: 18 + r(1) * 64, drift: (r(2) - 0.5) * 22, size: 0.5 + r(3) * 1.1, delay: r(4) * 1400, life: 1400 + r(5) * 1300 };
+  });
 
-  function finish() {
-    if (finished) return;
-    finished = true;
+  let armed = $state(false);
+  let revealed = $state(false);
+  let leaving = $state(false);
+  let slot;
+  let done = false;
+
+  async function land() {
+    if (done) return;
+    done = true;
     leaving = true;
-    timers.push(setTimeout(() => ondone?.(), EXIT));
+    const target = landing();
+    await flyBrand(slot, target, { duration: calm ? 0 : Math.round(1050 * Math.max(pace, 0.7)) });
+    onlanded?.();
   }
 
+  function skip() {
+    if (!armed) armed = true;
+    revealed = true;
+  }
+
+  $effect(() => {
+    if (revealed && ready) land();
+  });
+
   onMount(() => {
-    timers.push(setTimeout(finish, HOLD));
+    const arm = () => {
+      if (document.visibilityState === 'visible') {
+        armed = true;
+        if (calm) setTimeout(() => (revealed = true), 650);
+      }
+    };
     const onKey = (event) => {
       if (['Escape', 'Enter', ' '].includes(event.key)) {
         event.preventDefault();
-        finish();
+        skip();
       }
     };
+    arm();
+    document.addEventListener('visibilitychange', arm);
     window.addEventListener('keydown', onKey);
     return () => {
-      timers.forEach(clearTimeout);
+      document.removeEventListener('visibilitychange', arm);
       window.removeEventListener('keydown', onKey);
     };
   });
 </script>
 
-<div class="ignition" class:calm class:leaving role="presentation" onclick={finish}>
-  <div class="ember" aria-hidden="true"></div>
+<div
+  class="ignition"
+  class:armed
+  class:calm
+  class:revealed
+  class:leaving
+  style:--k={pace || 1}
+  role="presentation"
+  onclick={skip}
+>
+  <div class="ember-glow" aria-hidden="true"></div>
 
-  <div class="lockup" role="img" aria-label="YILDIZ CTI">
-    <svg class="mark" viewBox="-30 -30 160 160" aria-hidden="true">
+  <div class="stage">
+    <div class="slot" bind:this={slot} role="img" aria-label="YILDIZ CTI">
+      <span class="part emblem-part" data-brand="emblem">
+        <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+          <path class="fill" d={EMBLEM_BODY} fill-rule="evenodd" />
+          <path class="final-star" d={EMBLEM_STAR} />
+        </svg>
+      </span>
+      <span class="part word-part" data-brand="word">
+        <svg class="word" viewBox="0 0 {WORD_WIDTH} 100" aria-hidden="true">
+          {#each WORD_LETTERS as letter, i}
+            <path d={letter.d} fill-rule="evenodd" style:--i={i} />
+          {/each}
+        </svg>
+      </span>
+    </div>
+
+    <svg class="fx" viewBox="-30 -30 160 160" aria-hidden="true">
       <defs>
         <radialGradient id="ig-spark">
           <stop offset="0%" stop-color="#ffffff" />
@@ -94,9 +144,21 @@
 
       <path class="flame" d={EMBLEM_BODY} fill-rule="evenodd" fill="url(#ig-fire)" filter="url(#ig-flame)" />
       <path class="outline" d={EMBLEM_BODY} pathLength="1" />
-      <path class="fill" d={EMBLEM_BODY} fill-rule="evenodd" />
       <g clip-path="url(#ig-body)">
         <rect class="sheen" x="-60" y="-10" width="46" height="130" fill="url(#ig-sheen)" />
+      </g>
+
+      <g class="embers">
+        {#each embers as e}
+          <circle
+            cx={e.x}
+            cy="88"
+            r={e.size}
+            style:--drift="{e.drift}px"
+            style:--delay="{e.delay}ms"
+            style:--life="{e.life}ms"
+          />
+        {/each}
       </g>
 
       <g class="star-group" style:transform-origin="{sx}px {sy}px">
@@ -112,69 +174,128 @@
       </g>
     </svg>
 
-    <svg class="word" viewBox="0 0 {WORD_WIDTH} 100" aria-hidden="true">
-      {#each WORD_LETTERS as letter, i}
-        <path d={letter.d} fill-rule="evenodd" style:--i={i} />
-      {/each}
-    </svg>
-
-    <p class="tagline mono">CTI · TTP BENZERLİK İSTASYONU</p>
+    <p class="tagline mono" onanimationend={(event) => event.animationName.includes('rise') && (revealed = true)}>
+      CTI · TTP BENZERLİK İSTASYONU
+    </p>
+    <p class="waiting mono" aria-live="polite">{revealed && !ready ? 'istasyon bağlanıyor…' : ''}</p>
   </div>
 
-  <button class="skip mono" onclick={finish}>ATLA <span class="kbd">Esc</span></button>
+  <button class="skip mono" onclick={skip}>ATLA <span class="kbd">Esc</span></button>
 </div>
 
 <style>
   .ignition {
+    --k: 1;
     position: fixed;
     inset: 0;
     z-index: 80;
     display: grid;
     place-items: center;
     background:
-      radial-gradient(circle at 50% 46%, rgba(255, 140, 60, 0.07), transparent 42%),
+      radial-gradient(circle at 50% 44%, rgba(255, 140, 60, 0.08), transparent 46%),
       var(--void);
     cursor: pointer;
-    transition: background var(--t-slow) var(--ease-out);
+    transition: opacity calc(650ms * var(--k)) var(--ease-out);
   }
 
   .ignition.leaving {
-    background: transparent;
     pointer-events: none;
+    background: transparent;
   }
 
-  .ember {
+  .ignition.leaving .ember-glow,
+  .ignition.leaving .fx,
+  .ignition.leaving .tagline,
+  .ignition.leaving .skip,
+  .ignition.leaving .waiting {
+    opacity: 0;
+    transition: opacity 380ms var(--ease-out);
+  }
+
+  .ember-glow {
     position: absolute;
-    width: min(70vmin, 620px);
+    width: min(90vmin, 860px);
     aspect-ratio: 1;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 123, 58, 0.16), rgba(255, 123, 58, 0) 62%);
-    animation: ember 3200ms var(--ease-out) both;
+    background: radial-gradient(circle, rgba(255, 123, 58, 0.18), rgba(255, 123, 58, 0) 62%);
+    opacity: 0;
     pointer-events: none;
   }
 
-  .lockup {
+  .stage {
+    --mark: clamp(200px, 44vmin, 420px);
     position: relative;
+    display: grid;
+    justify-items: center;
+  }
+
+  .slot {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: clamp(10px, 2.4vh, 22px);
-    transition:
-      opacity var(--t-slow) var(--ease-out),
-      transform var(--t-slow) var(--ease-out),
-      filter var(--t-slow) var(--ease-out);
+    gap: calc(var(--mark) * 0.1);
   }
 
-  .leaving .lockup {
-    opacity: 0;
-    transform: scale(1.08);
-    filter: blur(6px);
+  .part {
+    display: block;
+    color: var(--ink);
   }
 
   .mark {
-    width: clamp(170px, 34vh, 300px);
-    height: auto;
+    display: block;
+    width: var(--mark);
+    height: var(--mark);
     overflow: visible;
+  }
+
+  .word {
+    display: block;
+    width: calc(var(--mark) * 0.86);
+    height: auto;
+    overflow: hidden;
+  }
+
+  .fx {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: calc(var(--mark) * 1.6);
+    height: calc(var(--mark) * 1.6);
+    margin-left: calc(var(--mark) * -0.8);
+    margin-top: calc(var(--mark) * -0.3);
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .fill {
+    fill: currentColor;
+    opacity: 0;
+  }
+
+  .final-star {
+    fill: var(--signal);
+    opacity: 0;
+  }
+
+  .word path {
+    fill: currentColor;
+    transform-box: fill-box;
+    transform: translateY(120%);
+  }
+
+  .ring,
+  .ring-dash,
+  .satellite,
+  .flame,
+  .outline,
+  .sheen,
+  .spark,
+  .flares rect,
+  .star,
+  .embers circle,
+  .tagline,
+  .skip {
+    opacity: 0;
   }
 
   .ring {
@@ -183,13 +304,6 @@
     stroke-width: 0.45;
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation: draw 900ms var(--ease-out) 450ms forwards;
-  }
-
-  .satellite {
-    fill: var(--ink);
-    opacity: 0;
-    animation: appear 400ms var(--ease-out) 1100ms forwards;
   }
 
   .ring-dash {
@@ -197,8 +311,10 @@
     stroke: var(--seam-2);
     stroke-width: 0.35;
     stroke-dasharray: 0.6 3.2;
-    opacity: 0;
-    animation: appear 700ms var(--ease-out) 750ms forwards;
+  }
+
+  .satellite {
+    fill: var(--ink);
   }
 
   .spin {
@@ -212,9 +328,7 @@
   }
 
   .flame {
-    opacity: 0;
     transform-origin: 50px 52px;
-    animation: flame 2400ms var(--ease-out) 950ms forwards;
   }
 
   .outline {
@@ -224,84 +338,46 @@
     stroke-linejoin: round;
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation:
-      draw 1050ms var(--ease-in-out) 650ms forwards,
-      vanish 500ms var(--ease-out) 1900ms forwards;
-  }
-
-  .fill {
-    fill: var(--ink);
-    opacity: 0;
-    animation: appear 520ms var(--ease-out) 1480ms forwards;
   }
 
   .sheen {
     transform: translateX(0) skewX(-14deg);
-    animation: sheen 900ms var(--ease-in-out) 1850ms forwards;
-    opacity: 0;
   }
 
   .star-group {
     transform-box: view-box;
-    transition:
-      transform var(--t-slow) var(--ease-out),
-      opacity var(--t-slow) var(--ease-out);
   }
 
-  .leaving .star-group {
-    transform: scale(2.4);
-    opacity: 0;
-  }
-
-  .spark {
+  .spark,
+  .flares rect,
+  .star {
     transform-box: fill-box;
     transform-origin: center;
-    opacity: 0;
-    animation: spark 1300ms var(--ease-out) 60ms forwards;
-  }
-
-  .flares rect {
-    transform-box: fill-box;
-    transform-origin: center;
-    opacity: 0;
-    animation: flare 1100ms var(--ease-out) 160ms forwards;
-  }
-
-  .flares .diag {
-    animation-delay: 260ms;
   }
 
   .star {
     fill: var(--signal);
+  }
+
+  .embers circle {
+    fill: #ffb067;
     transform-box: fill-box;
     transform-origin: center;
-    opacity: 0;
-    animation:
-      star-in 900ms var(--ease-out) 320ms forwards,
-      glow 1600ms var(--ease-in-out) 1250ms infinite alternate;
-  }
-
-  .word {
-    width: clamp(150px, 26vh, 250px);
-    height: auto;
-    overflow: hidden;
-    fill: var(--ink);
-  }
-
-  .word path {
-    transform-box: fill-box;
-    transform: translateY(120%);
-    animation: rise-letter 620ms var(--ease-out) forwards;
-    animation-delay: calc(1650ms + var(--i) * 70ms);
   }
 
   .tagline {
-    margin: 0;
-    font-size: clamp(10.5px, 1.6vh, 12.5px);
-    letter-spacing: 0.32em;
+    margin: calc(var(--mark) * 0.08) 0 0;
+    font-size: clamp(10.5px, 1.7vmin, 13px);
+    letter-spacing: 0.34em;
     color: var(--ink-3);
-    opacity: 0;
-    animation: rise 600ms var(--ease-out) 2250ms forwards;
+  }
+
+  .waiting {
+    min-height: 1.4em;
+    margin: 10px 0 0;
+    font-size: 11.5px;
+    letter-spacing: 0.16em;
+    color: var(--signal);
   }
 
   .skip {
@@ -314,32 +390,121 @@
     font-size: 12px;
     letter-spacing: 0.14em;
     color: var(--ink-3);
-    opacity: 0;
-    animation: appear 400ms var(--ease-out) 500ms forwards;
   }
 
   .skip:hover {
     color: var(--ink);
   }
 
-  .calm .ring,
-  .calm .outline,
-  .calm .flame,
-  .calm .sheen,
-  .calm .spark,
-  .calm .flares rect,
-  .calm .satellite,
-  .calm .ring-dash,
-  .calm .ember {
+  .armed .ember-glow {
+    animation: ember calc(3200ms * var(--k)) var(--ease-out) forwards;
+  }
+
+  .armed .ring {
+    animation: draw calc(900ms * var(--k)) var(--ease-out) calc(450ms * var(--k)) forwards, show 1ms linear calc(450ms * var(--k)) forwards;
+  }
+
+  .armed .satellite {
+    animation: show calc(400ms * var(--k)) var(--ease-out) calc(1100ms * var(--k)) forwards;
+  }
+
+  .armed .ring-dash {
+    animation: show calc(700ms * var(--k)) var(--ease-out) calc(750ms * var(--k)) forwards;
+  }
+
+  .armed .flame {
+    animation: flame calc(2400ms * var(--k)) var(--ease-out) calc(950ms * var(--k)) forwards;
+  }
+
+  .armed .outline {
+    animation:
+      show 1ms linear calc(650ms * var(--k)) forwards,
+      draw calc(1050ms * var(--k)) var(--ease-in-out) calc(650ms * var(--k)) forwards,
+      vanish calc(500ms * var(--k)) var(--ease-out) calc(1900ms * var(--k)) forwards;
+  }
+
+  .armed .fill {
+    animation: show calc(520ms * var(--k)) var(--ease-out) calc(1480ms * var(--k)) forwards;
+  }
+
+  .armed .sheen {
+    animation: sheen calc(900ms * var(--k)) var(--ease-in-out) calc(1850ms * var(--k)) forwards;
+  }
+
+  .armed .spark {
+    animation: spark calc(1300ms * var(--k)) var(--ease-out) calc(60ms * var(--k)) forwards;
+  }
+
+  .armed .flares rect {
+    animation: flare calc(1100ms * var(--k)) var(--ease-out) calc(160ms * var(--k)) forwards;
+  }
+
+  .armed .flares .diag {
+    animation-delay: calc(260ms * var(--k));
+  }
+
+  .armed .star {
+    animation:
+      star-in calc(900ms * var(--k)) var(--ease-out) calc(320ms * var(--k)) forwards,
+      glow 1600ms var(--ease-in-out) calc(1250ms * var(--k)) infinite alternate;
+  }
+
+  .armed .embers circle {
+    animation: ember-rise var(--life) var(--ease-out) calc((1000ms + var(--delay)) * var(--k)) infinite;
+  }
+
+  .armed .word path {
+    animation: rise-letter calc(620ms * var(--k)) var(--ease-out) forwards;
+    animation-delay: calc((1650ms + var(--i) * 70ms) * var(--k));
+  }
+
+  .armed .tagline {
+    animation: rise calc(600ms * var(--k)) var(--ease-out) calc(2250ms * var(--k)) forwards;
+  }
+
+  .armed .skip {
+    animation: show 400ms var(--ease-out) 300ms forwards;
+  }
+
+  .revealed .fill,
+  .revealed .word path,
+  .revealed .tagline {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .revealed .star {
+    opacity: 1;
+    transform: none;
+  }
+
+  .revealed .final-star {
+    opacity: 1;
+  }
+
+  .revealed .fx .star {
+    opacity: 0;
+  }
+
+  .revealed .outline,
+  .revealed .sheen,
+  .revealed .spark,
+  .revealed .flares rect {
+    animation: none;
+    opacity: 0;
+  }
+
+  .calm .fx,
+  .calm .ember-glow {
     display: none;
   }
 
-  .calm .fill,
-  .calm .star,
-  .calm .word path,
-  .calm .tagline,
-  .calm .skip {
-    animation: appear 300ms linear forwards;
+  .calm.armed .fill,
+  .calm.armed .final-star,
+  .calm.armed .word path,
+  .calm.armed .tagline {
+    animation: show 300ms linear forwards;
     transform: none;
   }
 
@@ -349,13 +514,16 @@
     }
   }
 
-  @keyframes appear {
+  @keyframes show {
     to {
       opacity: 1;
     }
   }
 
   @keyframes vanish {
+    from {
+      opacity: 1;
+    }
     to {
       opacity: 0;
     }
@@ -458,6 +626,20 @@
     100% {
       opacity: 1;
       transform: translateX(190px) skewX(-14deg);
+    }
+  }
+
+  @keyframes ember-rise {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(1);
+    }
+    15% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--drift), -78px) scale(0.3);
     }
   }
 

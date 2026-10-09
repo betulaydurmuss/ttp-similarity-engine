@@ -193,13 +193,6 @@ input {
   }
 }
 
-@media (max-width: 1180px) {
-  :root {
-    --panel-left: 360px;
-    --panel-right: 380px;
-  }
-}
-
 @media (max-height: 820px) {
   :root {
     --bar: 56px;
@@ -207,8 +200,14 @@ input {
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 959px) {
   body {
     overflow: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .btn {
+    min-height: 40px;
   }
 }

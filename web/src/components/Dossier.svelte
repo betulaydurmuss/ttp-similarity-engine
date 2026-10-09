@@ -409,7 +409,7 @@
 
   .neighbours li {
     display: grid;
-    grid-template-columns: 1fr 60px 38px 54px 22px;
+    grid-template-columns: 1fr 60px 38px 54px 28px;
     gap: 8px;
     align-items: center;
   }
@@ -450,12 +450,32 @@
   }
 
   .cmp {
+    width: 28px;
+    height: 28px;
     color: var(--ink-3);
     font-size: 15px;
   }
 
   .cmp:hover {
     color: var(--signal);
+  }
+
+  @container panel (max-width: 400px) {
+    .neighbours li {
+      grid-template-columns: 1fr 38px 54px 28px;
+    }
+
+    .nbar {
+      display: none;
+    }
+
+    .evidence li {
+      grid-template-columns: 50px 1fr 40px;
+    }
+
+    .ebar {
+      display: none;
+    }
   }
 
   .error {

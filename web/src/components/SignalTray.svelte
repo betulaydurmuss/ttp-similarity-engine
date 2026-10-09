@@ -44,8 +44,7 @@
           <span class="id mono">{item.id}</span>
           <span class="name" title={item.name}>{item.name}</span>
           <span class="meta mono">
-            {#if item.injected}<em>gürültü</em>{:else}{BAND_LABELS[item.band]}{/if}
-            · {item.actor_count}
+            {#if item.injected}<em>gürültü</em>{:else}<span class="band">{BAND_LABELS[item.band]} · </span>{/if}{#if item.injected} · {/if}{item.actor_count}
           </span>
           <button class="x" aria-label="{item.id} kaldır" onclick={() => station.remove(item.id)}>×</button>
         </li>
@@ -80,7 +79,7 @@
   li {
     position: relative;
     display: grid;
-    grid-template-columns: 4px 58px 1fr auto 22px;
+    grid-template-columns: 4px 58px 1fr auto 28px;
     align-items: center;
     gap: 10px;
     min-height: clamp(34px, 5.2vh, 42px);
@@ -143,8 +142,8 @@
   }
 
   .x {
-    width: 22px;
-    height: 22px;
+    width: 28px;
+    height: 28px;
     color: var(--ink-3);
     font-size: 16px;
     line-height: 1;
@@ -204,6 +203,29 @@
     background: var(--signal);
     box-shadow: 0 0 0 0 rgba(255, 181, 74, 0.5);
     animation: beacon 2.4s var(--ease-out) infinite;
+  }
+
+  @container panel (max-width: 380px) {
+    .band {
+      display: none;
+    }
+
+    li {
+      grid-template-columns: 4px 54px 1fr auto 28px;
+      gap: 8px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    .x {
+      width: 40px;
+      height: 40px;
+    }
+
+    li {
+      grid-template-columns: 4px 58px 1fr auto 40px;
+      min-height: 44px;
+    }
   }
 
   @keyframes impact {
