@@ -5,8 +5,8 @@ behaving alike". Agglomerative clustering on the cosine *distance* matrix is
 the default because it needs no assumption about cluster shape and can be cut
 at a distance threshold rather than a guessed ``k``.
 
-Owner: engine module. Output feeds the heatmap ordering and the cluster labels
-shown next to query candidates.
+Owner: engine module. Output feeds the map's constellations and the cluster
+labels shown next to query candidates.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def cluster_actors(
 
     Args:
         similarity: Actor similarity matrix.
-        method: ``"agglomerative"``, ``"kmeans"`` or ``"dbscan"``.
+        method: Only ``"agglomerative"`` is implemented.
         n_clusters: Fixed cluster count; ``None`` uses ``distance_threshold``.
         distance_threshold: Cosine-distance cut for agglomerative clustering.
         linkage: Linkage criterion (``"average"`` by default -- ``"ward"`` is
@@ -108,35 +108,6 @@ def clusters_to_frame(
         ]
     )
     return frame.sort_values(["cluster_id", "actor_name"]).reset_index(drop=True)
-
-
-def order_for_heatmap(
-    similarity: SimilarityMatrix, assignments: dict[ActorId, int] | None = None
-) -> list[int]:
-    """Row/column ordering that puts similar actors next to each other.
-
-    A heatmap in arbitrary order shows nothing; ordered by the clustering
-    dendrogram it shows blocks. Used by the app.
-
-    Args:
-        similarity: Actor similarity matrix.
-        assignments: Optional cluster assignment; when given, actors are grouped
-            by cluster and ordered within it.
-
-    Returns:
-        Row indices in display order.
-    """
-    from scipy.cluster.hierarchy import linkage as scipy_linkage, leaves_list
-    from scipy.spatial.distance import squareform
-    distance = to_distance_matrix(similarity)
-    n = len(similarity.actor_ids)
-    if n <= 1:
-        return list(range(n))
-    # Ensure perfect symmetry for squareform
-    np.fill_diagonal(distance, 0.0)
-    condensed = squareform(distance, checks=False)
-    Z = scipy_linkage(condensed, method='average')
-    return list(leaves_list(Z).astype(int))
 
 
 def cluster_profile(

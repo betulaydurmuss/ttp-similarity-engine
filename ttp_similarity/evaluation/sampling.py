@@ -260,12 +260,6 @@ def plan_summary(plan: Sequence[TrialSpec]) -> dict[int, int]:
     return dict(sorted(counts.items()))
 
 
-# TODO(eval): add a harder sampling mode once the basic benchmark works --
-#   `sample_with_noise(actor, sample_size, noise_k, rng)` that injects
-#   `noise_k` techniques the actor does NOT use. Real incident data always
-#   contains techniques that turn out to be unrelated, and top-1 accuracy under
-#   noise is the number that says whether this tool survives contact with a real
-#   case. Note the decision in DECISIONS.md.
 # TODO(eval): consider a "commodity-only" adversarial sample (draw only from the
 #   most common techniques) to confirm the engine reports LOW confidence there
 #   instead of a confident wrong answer.

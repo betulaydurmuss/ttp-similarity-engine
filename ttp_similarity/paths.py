@@ -53,10 +53,9 @@ ATTCK_DATASET = "attck"
 MOCK_DATASET = "mock"
 KNOWN_DATASETS: tuple[str, ...] = (ATTCK_DATASET, MOCK_DATASET)
 
-#: What the UI and the evaluation module open when no dataset is specified.
-#: Deliberately the mock set, so a fresh clone is usable before the real
-#: ATT&CK build exists.
-DEFAULT_DATASET = MOCK_DATASET
+#: What every entry point opens when no dataset is specified. The synthetic
+#: set exists only as a test fixture and is never the default.
+DEFAULT_DATASET = ATTCK_DATASET
 
 
 @dataclass(frozen=True)
@@ -156,6 +155,11 @@ class Workspace:
     def clusters(self) -> Path:
         """``clusters.csv`` -- cluster assignment per actor."""
         return self.root / "clusters.csv"
+
+    @property
+    def layout(self) -> Path:
+        """``layout.csv`` -- 2-D map position per actor."""
+        return self.root / "layout.csv"
 
     # ------------------------------------ evaluation module outputs (stage 3)
     @property

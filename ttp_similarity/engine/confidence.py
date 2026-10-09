@@ -40,6 +40,8 @@ from .. import config
 from . import weighting
 from ..schema import Candidate, ConfidenceBreakdown, ConfidenceLevel, TechniqueId
 
+_FROM_CANDIDATES = object()
+
 
 def rarity_component(
     matched_technique_ids: Sequence[TechniqueId],
@@ -137,14 +139,20 @@ def score_confidence(
     known_technique_ids: Sequence[TechniqueId],
     weights: Mapping[TechniqueId, float],
     component_weights: Mapping[str, float] | None = None,
+    *,
+    runner_up_score: float | None | object = _FROM_CANDIDATES,
 ) -> ConfidenceBreakdown:
     """Compute the full confidence breakdown for a ranked candidate list.
 
     Args:
         candidates: Ranked candidates, best first. May be empty.
         known_technique_ids: Query techniques present in the vocabulary.
-        weights: Global technique weights.
+        weights: Rarity weights (:func:`~ttp_similarity.engine.weighting.rarity_weights`).
         component_weights: Relative weight of rarity / margin / sufficiency.
+        runner_up_score: Score of the second-best actor over the *whole*
+            ranking. The query path passes it explicitly so that the margin
+            does not depend on how many candidates the caller asked to see;
+            when omitted it is read from ``candidates[1]``.
 
     Returns:
         A :class:`~ttp_similarity.schema.ConfidenceBreakdown` with all three
@@ -156,7 +164,8 @@ def score_confidence(
     if not candidates:
         return ConfidenceBreakdown(rarity=0.0, margin=0.0, sufficiency=0.0, score=0.0, level=ConfidenceLevel.LOW)
     top = candidates[0]
-    runner_up_score = candidates[1].score if len(candidates) > 1 else None
+    if runner_up_score is _FROM_CANDIDATES:
+        runner_up_score = candidates[1].score if len(candidates) > 1 else None
     rarity = rarity_component(top.matched_technique_ids, weights)
     margin = margin_component(top.score, runner_up_score)
     sufficiency = sufficiency_component(len(known_technique_ids))
@@ -183,7 +192,6 @@ def explain(breakdown: ConfidenceBreakdown) -> list[str]:
         Zero or more Turkish explanation strings, ordered worst component first.
     """
     reasons = []
-    WEAK_THRESHOLD = 0.34
     components = [
         ('rarity', breakdown.rarity, 'Eşleşen teknikler yaygın ve ayırt edici değil'),
         ('margin', breakdown.margin, 'Aday 1 ve 2 arasındaki fark çok küçük'),
@@ -191,6 +199,6 @@ def explain(breakdown: ConfidenceBreakdown) -> list[str]:
     ]
     components.sort(key=lambda x: x[1])
     for name, value, msg in components:
-        if value < WEAK_THRESHOLD:
+        if value <= config.CONFIDENCE_WEAK_COMPONENT:
             reasons.append(msg)
     return reasons

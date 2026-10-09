@@ -41,6 +41,7 @@ from typing import Sequence
 import pandas as pd
 
 from .. import config, paths, storage
+from ..cli import configure_stdout
 from ..data import frequency as frequency_mod
 from ..data.normalize import filter_sparse_actors
 from ..engine import loading, query, vectorize, weighting
@@ -141,6 +142,7 @@ def build_artifacts(
         technique_names=names,
         weights=weights,
         space=space,
+        rarity_weights=weighting.rarity_weights(kept),
     )
 
 
@@ -305,7 +307,7 @@ def run_comparisons(
     1. Weighting ablation -- ``smooth_idf`` vs ``binary`` vs plain Jaccard.
        The single most important test: does the weighting earn its cost?
     2. Sparse-actor threshold -- 5 / 8 / 10.
-    3. Coverage correction -- off (current) vs on.
+    3. Coverage correction -- off vs on (current).
 
     Args:
         dataset: Workspace to evaluate.
@@ -830,12 +832,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scheme", default=None, choices=["smooth_idf", "plain_idf", "binary"])
     parser.add_argument("--metric", default=None, choices=["cosine", "jaccard"])
     parser.add_argument("--min-techniques", type=int, default=None)
-    parser.add_argument("--coverage-correction", action="store_true", default=None)
+    parser.add_argument(
+        "--coverage-correction",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="override config.COVERAGE_CORRECTION (--no-coverage-correction turns it off)",
+    )
     parser.add_argument("--fraction", type=float, default=None)
     parser.add_argument("--repeats", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args(argv)
 
+    configure_stdout()
     config.validate()
     if args.regimes:
         reports, significance = run_regimes(args.dataset)

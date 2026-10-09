@@ -7,7 +7,7 @@ a new dataset build without touching ingestion.
 Run::
 
     python -m ttp_similarity.engine.build --dataset mock
-    python -m ttp_similarity.engine.build --dataset mitre --scheme binary
+    python -m ttp_similarity.engine.build --dataset attck --scheme binary
 
 Owner: engine module.
 """
@@ -17,15 +17,16 @@ from __future__ import annotations
 import argparse
 
 from .. import config, paths, storage
-from ..schema import CLUSTER_COLUMNS, WEIGHT_COLUMNS
-from . import clustering, similarity as similarity_mod, vectorize, weighting
+from ..cli import configure_stdout
+from ..schema import CLUSTER_COLUMNS, LAYOUT_COLUMNS, WEIGHT_COLUMNS
+from . import clustering, layout as layout_mod, similarity as similarity_mod, vectorize, weighting
 
 
 def build_engine(
     dataset: str = paths.DEFAULT_DATASET,
     *,
-    scheme: str = config.WEIGHTING_SCHEME,
-    metric: str = config.SIMILARITY_METRIC,
+    scheme: str | None = None,
+    metric: str | None = None,
     skip_clustering: bool = False,
 ) -> paths.Workspace:
     """Build every stage-2 artefact for one dataset.
@@ -36,6 +37,7 @@ def build_engine(
         3. :func:`~ttp_similarity.engine.vectorize.build_vector_space` -> ``vector_space.npz``
         4. :func:`~ttp_similarity.engine.similarity.compute_similarity` -> ``similarity.npz``
         5. :func:`~ttp_similarity.engine.clustering.cluster_actors` -> ``clusters.csv``
+        6. :func:`~ttp_similarity.engine.layout.compute_layout` -> ``layout.csv``
 
     Args:
         dataset: Workspace name.
@@ -70,6 +72,10 @@ def build_engine(
         frame = clustering.clusters_to_frame(assignments, {a.actor_id: a.name for a in actors})
         storage.write_dataframe(frame, workspace.clusters, CLUSTER_COLUMNS)
 
+    storage.write_dataframe(
+        layout_mod.compute_layout(sim), workspace.layout, LAYOUT_COLUMNS
+    )
+
     stats = similarity_mod.similarity_stats(sim)
     print(f"Similarity stats: {stats}")
 
@@ -96,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-clustering", action="store_true")
     args = parser.parse_args(argv)
 
+    configure_stdout()
     config.validate()
     workspace = build_engine(
         args.dataset,

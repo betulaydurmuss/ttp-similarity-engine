@@ -40,6 +40,7 @@ from typing import Mapping, Sequence
 import pandas as pd
 
 from .. import config, paths, storage
+from ..cli import configure_stdout
 from ..schema import (
     TECHNIQUE_COLUMNS,
     Actor,
@@ -365,6 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     args = parser.parse_args(argv)
 
+    configure_stdout()
     config.validate()
     workspace = build_mock_dataset(paths.Workspace.get(args.dataset), seed=args.seed)
     frequency = storage.read_dataframe(workspace.technique_frequency)

@@ -13,7 +13,8 @@ Checks, in order:
 2. Every pinned dependency in ``requirements.txt``: installed? correct version?
 3. That the critical third-party imports actually work (a package can be
    installed and still fail to import -- wrong wheel, broken binary).
-4. That ``ttp_similarity`` itself imports, and that the mock dataset is present.
+4. That ``ttp_similarity`` itself imports, and that the ATT&CK dataset and
+   engine artefacts are built.
 
 Exits ``0`` when everything is fine, ``1`` when anything is wrong, and prints
 what to do about it.
@@ -39,9 +40,8 @@ CRITICAL_IMPORTS = (
     ("numpy", "numpy"),
     ("sklearn", "scikit-learn"),
     ("scipy", "scipy"),
-    ("matplotlib", "matplotlib"),
-    ("seaborn", "seaborn"),
-    ("streamlit", "streamlit"),
+    ("fastapi", "fastapi"),
+    ("uvicorn", "uvicorn"),
     ("requests", "requests"),
 )
 
@@ -243,18 +243,25 @@ def check_package(results):
 
     print("  alt moduller    %s" % OK)
 
-    workspace = paths.Workspace.get(paths.MOCK_DATASET)
+    workspace = paths.Workspace.get(paths.ATTCK_DATASET)
     if storage.dataset_exists(workspace):
-        print("  mock veri seti  %s (%s)" % (OK, workspace.root))
+        print("  ATT&CK verisi   %s (%s)" % (OK, workspace.root))
     else:
-        print("  mock veri seti  %s - henuz uretilmemis" % WARN)
-        results.warn("python -m ttp_similarity.data.mock_dataset")
+        print("  ATT&CK verisi   %s - henuz uretilmemis" % WARN)
+        results.warn("python -m ttp_similarity.data.build --dataset attck")
 
     if storage.engine_exists(workspace):
         print("  motor artefakt  %s" % OK)
+
+    web_index = os.path.join(REPO_ROOT, "web", "dist", "index.html")
+    if os.path.exists(web_index):
+        print("  arayuz derlemesi %s" % OK)
     else:
-        print("  motor artefakt  %s - henuz uretilmemis (engine modulu TODO)" % WARN)
-        results.warn("python -m ttp_similarity.engine.build --dataset mock")
+        print("  arayuz derlemesi %s - web/dist yok" % WARN)
+        results.warn("cd web && npm ci && npm run build")
+    else:
+        print("  motor artefakt  %s - henuz uretilmemis" % WARN)
+        results.warn("python -m ttp_similarity.engine.build --dataset attck")
 
 
 def main():

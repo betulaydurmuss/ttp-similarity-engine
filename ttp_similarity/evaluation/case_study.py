@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from .. import config, paths, storage
+from ..cli import configure_stdout
 from ..engine import loading, query
 from ..engine import similarity as similarity_mod
 from ..schema import Actor, EngineArtifacts, QueryResult
@@ -147,9 +148,15 @@ def neighbour_table(
 def contrast_queries(
     techniques: pd.DataFrame, size: int = QUERY_SIZE
 ) -> tuple[list[str], list[str]]:
-    """The actor's ``size`` most distinctive and ``size`` most commodity techniques."""
-    distinctive = list(techniques.head(size)["technique_id"])
-    commodity = list(techniques.tail(size)["technique_id"])
+    """The actor's most distinctive and most commodity techniques, never overlapping.
+
+    Each side takes up to ``size`` techniques, but no more than half of the
+    actor's list, so a sparsely documented actor yields two disjoint queries
+    rather than the same techniques twice.
+    """
+    per_side = min(size, len(techniques) // 2)
+    distinctive = list(techniques.head(per_side)["technique_id"])
+    commodity = list(techniques.tail(per_side)["technique_id"])
     return distinctive, commodity
 
 
@@ -202,12 +209,13 @@ def _render_query(title: str, ids: Sequence[str], result: QueryResult, target: s
     for tid in ids:
         lines.append(f"    {tid}  {names.get(tid, '')}")
     conf = result.confidence
+    weights = config.CONFIDENCE_COMPONENT_WEIGHTS
     lines += [
         "",
         f"  confidence: {conf.level.value.upper()}  (score {conf.score:.3f})",
-        f"    rarity      (0.40): {conf.rarity:.3f}",
-        f"    margin      (0.35): {conf.margin:.3f}",
-        f"    sufficiency (0.25): {conf.sufficiency:.3f}",
+        f"    rarity      ({weights['rarity']:.2f}): {conf.rarity:.3f}",
+        f"    margin      ({weights['margin']:.2f}): {conf.margin:.3f}",
+        f"    sufficiency ({weights['sufficiency']:.2f}): {conf.sufficiency:.3f}",
         "",
         "  candidates:",
     ]
@@ -346,11 +354,11 @@ def _write_text(actor, artifacts, techniques, neighbours, distinctive, commodity
             )
 
     lines += _render_query(
-        "5) QUERY FROM THE 8 MOST DISTINCTIVE TECHNIQUES",
+        f"5) QUERY FROM THE {len(distinctive)} MOST DISTINCTIVE TECHNIQUES",
         distinctive, results["distinctive"], actor.actor_id, names,
     )
     lines += _render_query(
-        "6) QUERY FROM THE 8 MOST COMMODITY TECHNIQUES (contrast)",
+        f"6) QUERY FROM THE {len(commodity)} MOST COMMODITY TECHNIQUES (contrast)",
         commodity, results["commodity"], actor.actor_id, names,
     )
     lines += ["", "", "=" * 96, " " + config.DISCLAIMER, "=" * 96]
@@ -369,8 +377,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--actor", required=True, help="ATT&CK group id, e.g. G0065")
     args = parser.parse_args(argv)
 
+    configure_stdout()
     config.validate()
-    written = build_case_study(args.dataset, args.actor)
+    written = build_case_study(args.dataset, args.actor.strip().upper())
     print(f"{len(written)} files written to {written[0].parent}")
     return 0
 
