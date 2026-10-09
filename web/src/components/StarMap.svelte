@@ -9,7 +9,7 @@
   import { fitTransform, paddedHull, smoothPath, toWorld, WORLD } from '../lib/geometry.js';
   import { pct } from '../lib/format.js';
 
-  let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, dim = false } = $props();
+  let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, dim = false, controls = true } = $props();
 
   let width = $state(0);
   let height = $state(0);
@@ -390,11 +390,13 @@
     </div>
   {/if}
 
-  <div class="controls" style:right="{safe.right + 16}px" style:bottom="{safe.bottom + 16}px">
-    <button class="ctl" onclick={() => zoomBy(1.4)} aria-label="Yakınlaştır">+</button>
-    <button class="ctl" onclick={() => zoomBy(1 / 1.4)} aria-label="Uzaklaştır">−</button>
-    <button class="ctl ctl--wide mono" onclick={() => station.recenter()} aria-label="Tüm haritayı göster">TÜMÜ</button>
-  </div>
+  {#if controls}
+    <div class="controls" style:right="{safe.right + 16}px" style:bottom="{safe.bottom + 16}px">
+      <button class="ctl" onclick={() => zoomBy(1.4)} aria-label="Yakınlaştır">+</button>
+      <button class="ctl" onclick={() => zoomBy(1 / 1.4)} aria-label="Uzaklaştır">−</button>
+      <button class="ctl ctl--wide mono" onclick={() => station.recenter()} aria-label="Tüm haritayı göster">TÜMÜ</button>
+    </div>
+  {/if}
 
   {#if station.result?.candidates?.length}
     <div class="legend" style:left="{safe.left + 16}px" style:top="{safe.top + 12}px">

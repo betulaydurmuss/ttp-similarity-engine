@@ -18,6 +18,7 @@
   import MatrixPicker from './components/MatrixPicker.svelte';
   import Compare from './components/Compare.svelte';
   import Toast from './components/Toast.svelte';
+  import emblem from './assets/brand/yildiz-emblem.png';
 
   const ARRIVED_KEY = 'istasyon.arrived';
 
@@ -175,7 +176,7 @@
 <div class="station" class:compact>
   <div class="space">
     {#if station.data}
-      <StarMap {safe} intro={arrival && !quickArrival} dim={station.mode === 'trust'} />
+      <StarMap {safe} intro={arrival && !quickArrival} dim={station.mode === 'trust'} controls={!arrival && station.mode !== 'trust'} />
     {/if}
   </div>
 
@@ -194,7 +195,7 @@
     </div>
   {:else if !station.data}
     <div class="boot" aria-busy="true">
-      <span class="ring"></span>
+      <img class="emblem" src={emblem} alt="" width="56" height="56" />
       <span class="mono">istasyon bağlanıyor</span>
     </div>
   {/if}
@@ -311,13 +312,10 @@
     text-transform: uppercase;
   }
 
-  .ring {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    border: 1px solid var(--seam-3);
-    border-top-color: var(--signal);
-    animation: spin 1.1s linear infinite;
+  .emblem {
+    width: 56px;
+    height: 56px;
+    animation: breathe 1.8s var(--ease-in-out) infinite;
   }
 
   .fault h1 {
@@ -336,9 +334,10 @@
     color: var(--signal);
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+  @keyframes breathe {
+    50% {
+      opacity: 0.35;
+      transform: scale(0.94);
     }
   }
 

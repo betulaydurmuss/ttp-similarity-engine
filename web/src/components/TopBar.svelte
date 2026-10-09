@@ -1,5 +1,6 @@
 <script>
   import { station } from '../lib/station.svelte.js';
+  import wordmark from '../assets/brand/yildiz-wordmark.png';
 
   const modes = [
     { id: 'observe', label: 'Gözlem', hint: 'Gözlenen teknikleri bilinen aktörlerle karşılaştır' },
@@ -18,16 +19,9 @@
 
 <header class="bar">
   <div class="brand">
-    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
-      <circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.35" />
-      <ellipse cx="16" cy="16" rx="12.5" ry="5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.6" transform="rotate(-28 16 16)" />
-      <circle cx="16" cy="16" r="3" fill="#ffb54a" />
-      <circle cx="26.4" cy="10.5" r="1.6" fill="#e9eef5" />
-    </svg>
-    <div class="name">
-      <strong>İstasyon</strong>
-      <span>TTP benzerlik</span>
-    </div>
+    <img src={wordmark} alt="YILDIZ" width="86" height="22" />
+    <span class="rule" aria-hidden="true"></span>
+    <span class="name">TTP benzerlik<br />istasyonu</span>
   </div>
 
   <nav class="modes" style:--active={active} aria-label="Bölümler">
@@ -72,25 +66,25 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    color: var(--ink-2);
+    gap: 12px;
+  }
+
+  .brand img {
+    display: block;
+    height: 22px;
+    width: auto;
+  }
+
+  .rule {
+    width: 1px;
+    height: 24px;
+    background: var(--seam-3);
   }
 
   .name {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.1;
-  }
-
-  .name strong {
-    font-weight: 600;
-    font-size: 15px;
-    letter-spacing: 0.02em;
-    color: var(--ink);
-  }
-
-  .name span {
-    font-size: 12px;
+    font-size: 11.5px;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
     color: var(--ink-3);
   }
 

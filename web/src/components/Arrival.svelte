@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import { int } from '../lib/format.js';
+  import wordmark from '../assets/brand/yildiz-wordmark.png';
 
   let { data, quick = false, onchoose } = $props();
 
@@ -45,9 +46,10 @@
 <section class="arrival" out:fade={{ duration: instant ? 0 : 420 }} aria-labelledby="arrival-title">
   <div class="veil"></div>
   <div class="frame">
-    <p class="eyebrow" class:on={phase >= 1}>
-      MITRE ATT&CK Enterprise · v{data.dataset.attack_version ?? '?'}
-    </p>
+    <div class="brandline eyebrow" class:on={phase >= 1}>
+      <img src={wordmark} alt="YILDIZ" width="110" height="28" />
+      <span>MITRE ATT&CK Enterprise · v{data.dataset.attack_version ?? '?'}</span>
+    </div>
     <h1 id="arrival-title" class:on={phase >= 1}>
       <span class="line">TTP Benzerlik</span>
       <span class="line accent">İstasyonu</span>
@@ -104,6 +106,23 @@
   .frame {
     position: relative;
     max-width: 720px;
+  }
+
+  .brandline {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .brandline img {
+    display: block;
+    height: clamp(22px, 3.6vh, 28px);
+    width: auto;
+  }
+
+  .brandline span {
+    padding-left: 16px;
+    border-left: 1px solid var(--seam-3);
   }
 
   .eyebrow,
