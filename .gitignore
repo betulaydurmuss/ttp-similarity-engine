@@ -30,9 +30,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# --- Streamlit ---
-.streamlit/secrets.toml
-
 # --- Project artifacts -------------------------------------------------
 # Every intermediate/derived file is reproducible from the pipeline,
 # so nothing under data/ or outputs/ is versioned except the folder markers.
