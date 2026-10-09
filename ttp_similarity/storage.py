@@ -206,7 +206,7 @@ def read_similarity(path: Path, dataset: str | None = None) -> SimilarityMatrix:
 
 
 def similarity_to_frame(similarity: SimilarityMatrix) -> pd.DataFrame:
-    """Square, labelled DataFrame view -- convenient for seaborn heatmaps."""
+    """Square, labelled DataFrame view of a similarity matrix."""
     return pd.DataFrame(
         similarity.matrix,
         index=list(similarity.actor_ids),

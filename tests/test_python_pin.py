@@ -133,11 +133,11 @@ def test_all_expected_dependencies_are_present():
         "numpy",
         "scikit-learn",
         "scipy",
-        "matplotlib",
-        "seaborn",
-        "streamlit",
+        "fastapi",
+        "uvicorn",
         "requests",
         "pytest",
+        "httpx2",
     }
 
 

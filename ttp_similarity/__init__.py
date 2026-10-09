@@ -8,14 +8,14 @@ The package is split into four independently runnable modules:
 * ``ttp_similarity.data``       -- ATT&CK ingestion, normalisation, frequency table
 * ``ttp_similarity.engine``     -- weighting, vectorisation, similarity, clustering, query
 * ``ttp_similarity.evaluation`` -- retrieval benchmark over known actors
-* ``ttp_similarity.app``        -- Streamlit UI
+* ``ttp_similarity.api``        -- the station: JSON API + the web interface
 
 Every module reads its inputs from disk and writes its outputs to disk, so the
-three of them can be developed in parallel against the file contract described
+four of them can be developed in parallel against the file contract described
 in :mod:`ttp_similarity.schema` and :mod:`ttp_similarity.paths`.
 
 The interpreter version is checked here, at import time. Every CLI entry point
-(``python -m ttp_similarity...``), the Streamlit app and the test suite import
+(``python -m ttp_similarity...``), the API server and the test suite import
 this package, so there is no way to run any part of the project on the wrong
 Python without being told. See :mod:`ttp_similarity.pyversion`.
 
