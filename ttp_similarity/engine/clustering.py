@@ -156,5 +156,38 @@ def cluster_profile(
         ``share_in_cluster``, ``lift`` (in-cluster share / overall share).
         Sorting by ``lift`` is what makes a cluster describable in words.
     """
-    # TODO(engine): join assignments onto the edge table, group by cluster.
-    raise NotImplementedError("cluster_profile")
+    columns = ["cluster_id", "technique_id", "technique_name", "share_in_cluster", "lift"]
+    edges = actor_technique[actor_technique["actor_id"].isin(assignments)]
+    edges = edges.drop_duplicates(["actor_id", "technique_id"])
+    if edges.empty:
+        return pd.DataFrame(columns=columns)
+
+    total_actors = len(assignments)
+    overall_share = edges.groupby("technique_id")["actor_id"].nunique() / total_actors
+    names = edges.drop_duplicates("technique_id").set_index("technique_id")["technique_name"]
+
+    edges = edges.assign(cluster_id=edges["actor_id"].map(assignments))
+    edges = edges[edges["cluster_id"] >= 0]
+    cluster_sizes = pd.Series(assignments).loc[lambda s: s >= 0].value_counts()
+
+    rows = []
+    for cluster_id, group in edges.groupby("cluster_id"):
+        counts = group.groupby("technique_id")["actor_id"].nunique()
+        share = counts / cluster_sizes[cluster_id]
+        frame = pd.DataFrame(
+            {
+                "cluster_id": int(cluster_id),
+                "technique_id": share.index,
+                "technique_name": names.reindex(share.index).to_numpy(),
+                "share_in_cluster": share.to_numpy(),
+                "lift": (share / overall_share.reindex(share.index)).to_numpy(),
+            }
+        )
+        frame = frame.sort_values(
+            ["lift", "share_in_cluster", "technique_id"], ascending=[False, False, True]
+        )
+        rows.append(frame.head(top_n))
+
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(rows, ignore_index=True)[columns]

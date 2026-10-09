@@ -13,8 +13,8 @@ Three screens, reached from the left rail rather than from tabs:
   score built on commodity overlap means something different from the same
   score built on rare overlap.
 
-The cluster-profile panel is deliberately absent -- ``cluster_profile()`` is not
-implemented.
+The heatmap screen closes with a cluster-profile panel built from
+``clustering.cluster_profile()``.
 
 No scoring happens here. Everything comes from the engine, so the CLI and the UI
 cannot disagree. Presentation is likewise not here: every bordered strip, bar and
@@ -357,6 +357,57 @@ def render_heatmap_tab(artifacts: EngineArtifacts) -> None:
         ),
         rows=_top_pair_rows(subset, names),
         grid="2.2rem 1fr 1fr 5rem",
+    )
+
+    _render_cluster_profiles(artifacts)
+
+
+def _render_cluster_profiles(artifacts: EngineArtifacts) -> None:
+    """Per-cluster defining techniques, ranked by lift."""
+    if not artifacts.clusters:
+        return
+    profile = clustering.cluster_profile(
+        dict(artifacts.clusters), loaders.get_actor_technique(artifacts.dataset)
+    )
+    if profile.empty:
+        return
+
+    names = _actor_names(artifacts)
+    members: dict[int, list[str]] = {}
+    for actor_id, cluster_id in artifacts.clusters.items():
+        members.setdefault(int(cluster_id), []).append(names.get(actor_id, actor_id))
+
+    theme.section(
+        "04",
+        "Küme profilleri",
+        "Lift: tekniğin kümedeki payı / tüm aktörlerdeki payı. Yüksek lift kümeyi ayırt eder.",
+    )
+    cluster_ids = sorted(profile["cluster_id"].unique())
+    chosen = st.selectbox(
+        "Küme",
+        cluster_ids,
+        format_func=lambda c: f"Küme {c} ({len(members.get(int(c), []))} aktör)",
+    )
+    st.caption(", ".join(sorted(members.get(int(chosen), []))))
+
+    rows = [
+        [
+            row.technique_id,
+            row.technique_name,
+            f"{row.share_in_cluster:.0%}",
+            f"{row.lift:.2f}",
+        ]
+        for row in profile[profile["cluster_id"] == chosen].itertuples()
+    ]
+    theme.table(
+        columns=(
+            ("teknik", "ttp-ev__id"),
+            ("ad", "ttp-cell"),
+            ("kümedeki pay", "ttp-num"),
+            ("lift", "ttp-num"),
+        ),
+        rows=rows,
+        grid="5rem 1fr 7rem 5rem",
     )
 
 
