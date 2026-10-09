@@ -27,13 +27,12 @@ from ..schema import SimilarityMatrix  # noqa: E402
 #: Above this many actors the per-cell numbers stop being legible.
 ANNOTATION_LIMIT = 20
 
-#: Console colormap, built from the palette in
-#: :mod:`ttp_similarity.app.theme` so the matrix belongs to the same design as
-#: the rest of the page. Runs from the page background up through the accent, so
-#: a weak similarity reads as "empty" rather than as a colour of its own.
+#: Console colormap. Runs from light (weak similarity) to a deep teal (strong
+#: similarity), so darker means more similar. The dark end is deliberately a
+#: little lighter than the page background so the strongest cells stay visible.
 DARK_CMAP = LinearSegmentedColormap.from_list(
-    "ttp_dark",
-    ["#0b0f14", "#12262e", "#17414a", "#1d6a6b", "#2f9f93", "#4fd1c5", "#b4efe8"],
+    "ttp_dark_r",
+    ["#b4efe8", "#4fd1c5", "#2f9f93", "#1d6a6b", "#175560", "#10404b", "#0b2f3a"],
 )
 
 #: Palette for the dark figure furniture (ticks, title, colourbar).
@@ -93,7 +92,7 @@ def similarity_heatmap(
         square=True,
         annot=annotate,
         fmt=".2f",
-        annot_kws={"size": 7, "color": _DARK_INK["text"] if dark else None},
+        annot_kws={"size": 7} if dark else {"size": 7, "color": None},
         linewidths=0.3 if count <= 40 else 0.0,
         linecolor=_DARK_INK["line"] if dark else "white",
         cbar_kws={"label": "benzerlik", "shrink": 0.6},
