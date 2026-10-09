@@ -108,10 +108,19 @@ _CSS = """
 
 /* ---------- Streamlit chrome ------------------------------------------- */
 /* The header bar is emptied rather than hidden: display:none would take the
-   sidebar collapse control with it. */
+   sidebar collapse control with it. The same goes for stToolbar: in recent
+   Streamlit it hosts the button that re-opens a collapsed sidebar, so only its
+   noisy children (actions, menu, deploy) are hidden, never the toolbar itself. */
 header[data-testid="stHeader"] { background: transparent; height: 2.2rem; }
-[data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {
+[data-testid="stToolbarActions"], [data-testid="stMainMenu"],
+[data-testid="stAppDeployButton"], [data-testid="stDecoration"], #MainMenu, footer {
   display: none !important;
+}
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 [data-testid="stAppViewContainer"] { background: var(--ttp-bg); }
 [data-testid="stMain"] .block-container {
