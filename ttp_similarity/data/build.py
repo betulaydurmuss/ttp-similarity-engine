@@ -28,6 +28,7 @@ from typing import Any, Mapping, Sequence
 import pandas as pd
 
 from .. import config, paths, storage
+from ..cli import configure_stdout
 from ..schema import TECHNIQUE_COLUMNS, Actor, BuildManifest, Technique, join_list
 from . import frequency as frequency_mod
 from . import mock_dataset, normalize, stix_download, stix_parse
@@ -216,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=None, help="mock generator seed")
     args = parser.parse_args(argv)
 
+    configure_stdout()
     config.validate()
     paths.ensure_base_dirs()
     workspace = build_dataset(

@@ -31,13 +31,14 @@ Owner: engine module.
 from __future__ import annotations
 
 import math
-from typing import Mapping
+from collections import Counter
+from typing import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
 
 from .. import config
-from ..schema import TechniqueId
+from ..schema import Actor, TechniqueId
 
 
 def idf(
@@ -121,8 +122,11 @@ def normalized_rarity(
 
     Feeds the ``rarity`` component of the confidence score. The raw weights are
     unbounded above, so they are divided by the dataset's maximum weight; a set
-    made only of the rarest techniques scores 1.0, one made only of universal
-    techniques scores near 0.
+    made only of the rarest techniques scores 1.0. Under ``smooth_idf`` the
+    floor is ``1 / max_weight`` (about 0.2 on ATT&CK), not 0, which the
+    confidence thresholds were calibrated against. Pass
+    :func:`rarity_weights`, never the weights of an ablation scheme: under
+    ``binary`` every technique would look maximally rare.
 
     Args:
         technique_ids: Techniques to score (typically the matched ones).
@@ -142,3 +146,19 @@ def normalized_rarity(
     collected_weights = [weights.get(tid, min_weight) for tid in technique_ids]
     
     return (sum(collected_weights) / len(collected_weights)) / max_weight
+
+
+def rarity_weights(actors: Sequence[Actor]) -> dict[TechniqueId, float]:
+    """Smoothed IDF over the actor population, whatever scheme scores the query.
+
+    Args:
+        actors: The actors the engine indexes.
+
+    Returns:
+        ``{technique_id: idf}`` for every technique used by at least one actor.
+    """
+    counts: Counter[TechniqueId] = Counter()
+    for actor in actors:
+        counts.update(set(actor.technique_ids))
+    n_actors = len(actors)
+    return {tid: idf(count, n_actors) for tid, count in counts.items()}

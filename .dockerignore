@@ -37,5 +37,13 @@ outputs/
 .git/
 .gitignore
 
-# ─── Streamlit secrets ──────────────────────────────────────────
-.streamlit/secrets.toml
+
+# ─── Web arayuzu (imaj icinde derlenir) ─────────────────────────
+web/node_modules/
+web/dist/
+
+# ─── Yerel arac ayarlari ve marka kaynak dosyalari ──────────────
+.claude/
+.github/
+/*.png
+web/e2e/artifacts/

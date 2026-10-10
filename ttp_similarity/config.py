@@ -13,10 +13,9 @@ from typing import Final, Mapping
 # --------------------------------------------------------------------------- #
 # Data source (data module)
 # --------------------------------------------------------------------------- #
-#: MITRE ATT&CK Enterprise STIX 2.1 bundle. ``ATTACK_RELEASE`` selects the tag;
-#: pin it to a release (e.g. ``"v15.1"``) before publishing any numbers, so a
-#: result can be reproduced later.
-ATTACK_RELEASE: Final[str] = "master"
+#: MITRE ATT&CK Enterprise STIX 2.1 bundle, pinned to a release tag so every
+#: build of the same code downloads the same bundle. See DECISIONS.md 2.1.
+ATTACK_RELEASE: Final[str] = "v19.2"
 ATTACK_STIX_URL: Final[str] = (
     "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/"
     f"{ATTACK_RELEASE}/enterprise-attack/enterprise-attack.json"
@@ -76,7 +75,7 @@ NORMALIZE_VECTORS: Final[bool] = True
 #: unweighted sanity check.
 SIMILARITY_METRIC: Final[str] = "cosine"
 
-#: ``"agglomerative"`` | ``"kmeans"`` | ``"dbscan"``
+#: Only ``"agglomerative"`` is implemented (DECISIONS.md 4.2).
 CLUSTERING_METHOD: Final[str] = "agglomerative"
 CLUSTERING_LINKAGE: Final[str] = "average"
 
@@ -136,9 +135,12 @@ CONFIDENCE_COMPONENT_WEIGHTS: Final[Mapping[str, float]] = {
 CONFIDENCE_HIGH_THRESHOLD: Final[float] = 0.70
 CONFIDENCE_MEDIUM_THRESHOLD: Final[float] = 0.45
 
-#: Score gap between candidate #1 and #2 at which the margin component hits 1.0.
+#: Relative score gap ``(s1 - s2) / s1`` at which the margin component hits 1.0.
 #: Cosine gaps are small in practice, hence the low ceiling.
 MARGIN_SATURATION: Final[float] = 0.15
+
+#: A confidence component at or below this is reported as the weak one.
+CONFIDENCE_WEAK_COMPONENT: Final[float] = 0.34
 
 # --------------------------------------------------------------------------- #
 # Evaluation module
@@ -174,7 +176,6 @@ EVAL_THRESHOLD_SWEEP: Final[tuple[int, ...]] = (5, 8, 10)
 #: unrealistically easy (a rare unrelated technique is trivial to discount).
 EVAL_NOISE_RATIO: Final[float] = 0.30
 
-#: Actors with fewer techniques than the sample size are skipped for that size.
 EVAL_RANDOM_SEED: Final[int] = 1337
 
 # --------------------------------------------------------------------------- #
@@ -188,8 +189,8 @@ DISCLAIMER: Final[str] = (
     "ve raporlama yanlılığından etkilenir."
 )
 
-#: Colormap used by the similarity heatmap.
-HEATMAP_COLORMAP: Final[str] = "rocket_r"
+#: Seed of the 2-D map projection, so the map is identical on every build.
+LAYOUT_RANDOM_SEED: Final[int] = 7
 
 
 def validate() -> None:
@@ -212,3 +213,7 @@ def validate() -> None:
         raise ValueError(f"unknown SIMILARITY_METRIC: {SIMILARITY_METRIC}")
     if MIN_QUERY_TECHNIQUES < 1:
         raise ValueError("MIN_QUERY_TECHNIQUES must be >= 1")
+    if CLUSTERING_METHOD != "agglomerative":
+        raise ValueError(f"unsupported CLUSTERING_METHOD: {CLUSTERING_METHOD}")
+    if MARGIN_SATURATION <= 0 or SUFFICIENCY_SATURATION <= MIN_QUERY_TECHNIQUES:
+        raise ValueError("saturation points must lie above their minimums")

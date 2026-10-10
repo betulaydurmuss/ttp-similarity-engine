@@ -29,6 +29,7 @@ from typing import Any
 import requests
 
 from .. import config, paths
+from ..cli import configure_stdout
 
 
 def _sha256(path: Path) -> str:
@@ -190,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--url", default=config.ATTACK_STIX_URL)
     args = parser.parse_args(argv)
 
+    configure_stdout()
     paths.ensure_base_dirs()
     destination = fetch_attack_bundle(url=args.url, force=args.force)
     metadata = read_bundle_metadata()

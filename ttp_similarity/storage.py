@@ -42,6 +42,7 @@ _PRODUCER_HINTS: Mapping[str, str] = {
     "vector_space.npz": "python -m ttp_similarity.engine.build --dataset {dataset}",
     "similarity.npz": "python -m ttp_similarity.engine.build --dataset {dataset}",
     "clusters.csv": "python -m ttp_similarity.engine.build --dataset {dataset}",
+    "layout.csv": "python -m ttp_similarity.engine.build --dataset {dataset}",
     "evaluation.json": "python -m ttp_similarity.evaluation.benchmark --dataset {dataset}",
 }
 
@@ -205,7 +206,7 @@ def read_similarity(path: Path, dataset: str | None = None) -> SimilarityMatrix:
 
 
 def similarity_to_frame(similarity: SimilarityMatrix) -> pd.DataFrame:
-    """Square, labelled DataFrame view -- convenient for seaborn heatmaps."""
+    """Square, labelled DataFrame view of a similarity matrix."""
     return pd.DataFrame(
         similarity.matrix,
         index=list(similarity.actor_ids),
@@ -236,3 +237,9 @@ def read_technique_names(path: Path, dataset: str | None = None) -> dict[Techniq
     """Load ``techniques.csv`` into ``{technique_id: technique_name}``."""
     frame = read_dataframe(path, dataset)
     return {str(r.technique_id): str(r.technique_name) for r in frame.itertuples()}
+
+
+def read_layout(path: Path, dataset: str | None = None) -> dict[ActorId, tuple[float, float]]:
+    """Load ``layout.csv`` into ``{actor_id: (x, y)}``."""
+    frame = read_dataframe(path, dataset)
+    return {str(r.actor_id): (float(r.x), float(r.y)) for r in frame.itertuples()}

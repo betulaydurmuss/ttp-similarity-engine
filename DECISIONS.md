@@ -32,13 +32,13 @@ Ekip içinde ve çıktılarda tek dil kullanılması için:
 Bu bölümdeki kararların tamamı `data/` modülünde **uygulandı**. Verilen sayılar ATT&CK Enterprise **v19.2** (indirme: 2026-09-07) üzerinde ölçülmüştür.
 
 ### 2.1 Kullanılan ATT&CK sürümü ve tekrarlanabilirlik
-**Kabul.** Kaynak: `mitre-attack/attack-stix-data` deposundaki `enterprise-attack/enterprise-attack.json`. Sürüm referansı `config.ATTACK_RELEASE` ile seçilir ve şu an `"master"`, yani **hareketli bir referans**.
+**Kabul.** Kaynak: `mitre-attack/attack-stix-data` deposundaki `enterprise-attack/enterprise-attack.json`. Sürüm referansı `config.ATTACK_RELEASE` ile seçilir ve `"v19.2"` etiketine **sabitlenmiştir** (2026-10-09'a kadar hareketli `"master"` idi).
 
 İndirilen her paketin yanına `data/raw/enterprise-attack.meta.json` yazılır: kaynak URL, indirme zaman damgası (UTC), sunucu ETag'i, dosya boyutu, SHA-256 özeti ve paketin kendi beyan ettiği `x_mitre_version`. Bu sayede bir rapor "ATT&CK v19.2, 2026-09-07 tarihinde indirildi, sha256 …" diyebilir.
 
 İlk ölçüm: **v19.2**, 53.835.637 bayt, 26.086 STIX nesnesi.
 
-**Yeniden değerlendirilecek — yayın öncesi zorunlu:** Sayı yayımlanmadan önce `ATTACK_RELEASE` sabit bir sürüm etiketine (`"v19.2"` gibi) çekilmelidir. `master` üzerinde iki hafta arayla alınan iki build farklı sonuç verir ve karşılaştırılamaz. Meta dosyası bu durumu tespit etmeyi sağlar ama engellemez.
+**Kapandı (2026-10-09).** `ATTACK_RELEASE = "v19.2"`. Aynı kod her zaman aynı paketi indirir; yeni bir ATT&CK sürümüne geçiş bilinçli bir commit'le yapılır ve bu dosyadaki sayılar yeniden ölçülür. Meta dosyası indirilen paketin SHA-256 özetini kaydetmeye devam eder.
 
 ### 2.2 Alt teknikler ana tekniğe indirgenir
 `ROLL_UP_SUBTECHNIQUES = True` — **Kabul.**
@@ -229,6 +229,8 @@ Neden ortalama, maksimum değil: maksimum kullanılsaydı, tek bir nadir tekniğ
 
 En yüksek ağırlığa sahip bileşendir, çünkü ayırt edicilik olmadan sıralama zaten anlamsızdır.
 
+**Düzeltme (2026-10-09) — nadirlik verinin özelliğidir, şemanın değil.** Nadirlik önceden skorlamada kullanılan şemanın ağırlıklarından okunuyordu. `binary` ablasyonunda tüm ağırlıklar 1 olduğu için her sorgunun nadirliği **sabit 1,0** çıkıyor ve güven skoruna her sorguda +0,40 ekleniyordu. Artık nadirlik, skorlama şeması ne olursa olsun aktör popülasyonu üzerindeki smoothed IDF'ten (`weighting.rarity_weights`) hesaplanıyor. `smooth_idf` için sonuç birebir aynı (aynı formül), dolayısıyla eşik kalibrasyonu etkilenmedi; benchmark rejim sayıları değişmedi.
+
 ### 5.2 Fark (margin) — 0.35
 ```
 margin = min(1, ((skor_1 - skor_2) / skor_1) / MARGIN_SATURATION)
@@ -238,6 +240,8 @@ margin = min(1, ((skor_1 - skor_2) / skor_1) / MARGIN_SATURATION)
 Yani 1. ve 2. aday arasında %15 göreli fark varsa bileşen doyuma ulaşır. Pratikte kosinüs farkları küçüktür, bu yüzden tavan düşük tutuldu; gerçek veride skor dağılımı görüldükten sonra ölçülüp güncellenecek.
 
 Tek aday varsa bileşen 1.0'dır — karışacak bir şey yoktur. Berabere kalan iki aday, "bunlardan biri" demektir, "bu" değil; sonuç bu şekilde okunmalıdır.
+
+**Düzeltme (2026-10-09) — ayrışma, gösterilen liste uzunluğuna bağlı olamaz.** İkinci aday önceden `top_k` ile kesilmiş listeden okunuyordu: aynı sorgu `top_k=10` ile DÜŞÜK (0,34), `top_k=1` ile ORTA (0,67) çıkıyordu. Artık ikinci skor tüm sıralamadan alınıyor (`query.runner_up`); güven, kaç aday gösterildiğinden bağımsız. Birim ve API testleriyle korunuyor.
 
 ### 5.3 Yeterlilik (sufficiency) — 0.25
 ```
@@ -260,6 +264,8 @@ Kalibrasyon ölçütü `evaluation.metrics.breakdown_by_confidence` tablosudur: 
 **Kabul.** Her aday için, skoru üreten teknikler ve katkı payları (`evidence`) ile **aday aktörde görülmeyen sorgu teknikleri** (`missing_technique_ids`) döndürülür. Gerekçe: analiste "bu aktör 9 tekniğinizin 6'sıyla eşleşiyor, bunlar da eşleşmiyor" denebilmelidir. Açıklanamayan bir sıralama, denetlenemeyeceği için kullanılabilir istihbarat değildir.
 
 `MAX_EVIDENCE_TECHNIQUES = 8` — arayüzde okunabilirlik sınırı, yöntemsel bir karar değil.
+
+**Düzeltme (2026-10-09) — katkı payı skorun gerçek ayrışımıdır.** Paylar önceden ağırlıkla doğrusal hesaplanıyordu (`w / Σw`). Kosinüste hem aktör satırı hem sorgu bir tekniği ağırlığıyla taşıdığı için o tekniğin nokta çarpımına katkısı `w²` ile orantılıdır. Eski hesap yaygın teknikleri gerçek etkilerinin yaklaşık iki katı gösteriyordu (T1059: %8,9 gösterilip gerçekte %4,3). Artık pay metriğe göre hesaplanıyor (`query.contribution_mass`: kosinüs `w²`, ağırlıklı Jaccard `w`, Jaccard 1) ve paylar adayın skorunu birebir yeniden üretiyor (`test_evidence_shares_are_the_true_cosine_decomposition`).
 
 ---
 
@@ -302,7 +308,7 @@ Bu, "ağırlıklandırma işe yaramıyor" demek **değildir** — 7.2'deki tavan
 Metrikler monoton olarak iyileşiyor, ama bu bir kazanç değil **tanım gereği**: eşik yükseldikçe zor vakalar (az teknikli aktörler) popülasyondan çıkarılıyor. 5→10 arasında 32 aktör (%21) kaybediliyor. Eşik seçimi bir başarım kararı değil, **kapsam kararı**dır: kaç aktör hakkında konuşmak istediğinizle ilgilidir.
 
 ### 7.5 Kapsam (coverage) düzeltmesi
-`COVERAGE_CORRECTION = False` — **varsayılan kapalı, açık madde.**
+`COVERAGE_CORRECTION = True` — **Kabul (karar §11.1'de).** Bu bölüm kararın öncesindeki ölçümdür.
 
 `score * (eşleşen / |sorgu|) ** COVERAGE_CORRECTION_EXPONENT`.
 
@@ -310,7 +316,9 @@ Metrikler monoton olarak iyileşiyor, ama bu bir kazanç değil **tanım gereği
 
 Asıl etki, §3.3'te tarif edilen az teknikli aktör şişmesinde: hedef olmadığı hâlde 1. sırada tahmin edilen **5–10 teknikli** aktör sayısı **64 → 30** düştü. Toplam yanlış top-1: 70 → 36. Boyut yanlılığı korelasyonu ρ=+0,523'ten +0,462'ye indi — azaldı ama kalkmadı.
 
-Yani düzeltme, tasarlandığı sorunu (Elderwood etkisi) fiilen çözüyor. Varsayılan kapalı bırakıldı çünkü karar kullanıcıya ait ve tavana vurmuş bir ölçümde 1,2 puanlık kazanç tek başına yeterli gerekçe değil.
+Yani düzeltme, tasarlandığı sorunu (Elderwood etkisi) fiilen çözüyor; §11.1'de varsayılan olarak açıldı. CLI'dan kapatmak için `--no-coverage-correction` kullanılır.
+
+**Açık — ölçüm yanlılığı.** Kendini bulma testinde hedef aktör sorgunun tamamını tasarım gereği kapsar (A ve B rejimlerinde kapsam %100). Kapsam düzeltmesi bu yüzden A rejiminde hedefi yapısal olarak kayırır; kararın gürültülü rejimde (C) açık/kapalı karşılaştırmasıyla ayrıca doğrulanması gerekir.
 
 ### 7.6 Teknik sayısı ile başarı ilişkisi
 **Ölçülen (kapsam düzeltmesi kapalı):**
@@ -328,7 +336,7 @@ Aktör başına top-1 ile teknik sayısı arasında Spearman **ρ = +0,523**. §
 ### 7.7 Güven kalibrasyonu
 **Sonuç: kalibrasyon çalışıyor.** `smooth_idf` koşusunda HIGH etiketli 1.586 sorguda top-1 **1,000**, MEDIUM'da 0,979, LOW'da **0,603**. Yani güven skoru düşük dediğinde gerçekten daha sık yanılıyor — DECISIONS §5.4'teki hedefler (HIGH ≥0,80, LOW ≤0,40) HIGH tarafında fazlasıyla, LOW tarafında **tutmuyor** (0,603 > 0,40).
 
-**Açık:** LOW etiketi fazla iyimser. Ayrıca `binary` ve `jaccard` koşularında sorguların %96'sı HIGH etiketleniyor — ağırlıksız skorlarda `margin` bileşeni büyüdüğü için güven şişiyor. Eşiklerin şema başına ayarlanması mı gerekiyor, yoksa `margin` doygunluğu mu yeniden ayarlanmalı, ölçülmeli.
+**Açık:** LOW etiketi fazla iyimser. Ayrıca `binary` ve `jaccard` koşularında sorguların %96'sı HIGH etiketleniyordu. **Kök neden bulundu (2026-10-09):** bu iki koşuda nadirlik bileşeni sabit 1,0 çıkıyordu (§5.1'deki düzeltme). Düzeltmeden sonra ağırlıksız koşuların kalibrasyonu yeniden ölçülmeli; `margin` doygunluğu ancak bundan sonra tartışılmalı.
 
 ### 7.8 Sınırlılık
 **Kabul (raporda açıkça yazılacak).** Alt küme, motorun indekslediği aynı kayıtlardan çekiliyor; ölçülen şey **erişim tutarlılığıdır**, gerçek dünya doğruluğu değil. Gerçek olay verisi gürültülüdür, eksiktir ve aktöre atfedilmemiş teknikler içerir. Gürültülü örnekleme modu hâlâ açık (§9, madde 7) ve 7.2'deki tavan sorunu göz önüne alındığında artık yalnızca "iyi olur" değil, **gerekli**.
@@ -345,7 +353,7 @@ Aktör başına top-1 ile teknik sayısı arasında Spearman **ρ = +0,523**. §
 
 **Kabul — eksik girdi hatası komut önerir.** `storage.require`, eksik bir artefaktla karşılaşınca onu üreten komutu söyler. Paralel geliştirmede en sık karşılaşılan sürtünme budur.
 
-**Kabul — ek altyapı yok.** Veritabanı, Docker, servis yok. Tüm ara çıktılar diskte dosyadır.
+**Kabul — ek altyapı yok.** Veritabanı yok; tüm ara çıktılar diskte dosyadır. İstasyon tek bir süreçtir (`python -m ttp_similarity.api`); Docker isteğe bağlı kolaylıktır (§12).
 
 **Kabul — sahte veri setinde gerçek teknik kimlikleri, uydurma aktör adları.** Sözlük gerçek olmalı ki motorun bugün gördüğü uzay ileride göreceğiyle aynı olsun; aktör adları uydurma olmalı ki sentetik veri hiçbir koşulda istihbarat sanılmasın.
 
@@ -358,16 +366,18 @@ Aktör başına top-1 ile teknik sayısı arasında Spearman **ρ = +0,523**. §
 | 1 | ~~`ALIAS_STOPLIST` ve yanlış birleşme koruması~~ — **kapandı** (§2.5) | `data/normalize.py` |
 | 2 | ~~Dolaylı `aktör → malware → teknik` ilişkileri~~ — **kapandı: hayır** (§2.4) | `data/stix_parse.py` |
 | 3 | `MIN_TECHNIQUES_PER_ACTOR`: dağılım ölçüldü (medyan 21), eşik hâlâ açık (§2.6) | `config.py` |
-| 4 | Kümeleme eşiği ARI ile doğrulanacak; `kmeans` desteklenecek mi | `engine/clustering.py` |
-| 5 | Yetersiz teknik sayısında sert `düşük` kuralı | `engine/confidence.py` |
+| 4 | ~~Kümeleme ARI ile doğrulanacak~~ — **kapandı:** sahte veride 5 aile ARI = 1,0 ile geri bulunuyor (`test_clustering_recovers_the_mock_families`); `kmeans` desteklenmiyor, `config.validate` reddediyor | `engine/clustering.py` |
+| 5 | ~~Yetersiz teknik sayısında sert `düşük` kuralı~~ — **kapandı:** `MIN_QUERY_TECHNIQUES` altında seviye her zaman DÜŞÜK | `engine/confidence.py` |
 | 6 | Güven eşiklerinin kalibrasyonu | `config.py` + `evaluation/` |
-| 7 | Gürültülü örnekleme modu | `evaluation/sampling.py` |
+| 7 | ~~Gürültülü örnekleme modu~~ — **kapandı:** rejim C (§11) ve arayüzdeki gürültü enjeksiyonu | `evaluation/sampling.py` |
 | 8 | Alt teknik korunan varyantın karşılaştırması (§2.2) | `config.py` |
-| 10 | `ATTACK_RELEASE` yayın öncesi sabit sürüme çekilmeli (§2.1) | `config.py` |
+| 10 | ~~`ATTACK_RELEASE` sabit sürüme çekilmeli~~ — **kapandı:** `v19.2` (§2.1) | `config.py` |
 | 11 | ~~Kapsam düzeltmesi açılsın mı~~ — **kapandı: AÇIK** (§11.1) | `config.py` |
 | 12 | ~~Ölçüm tavana vurdu~~ — **kapandı: rejim B/C eklendi** (§11.2) | `evaluation/` |
 | 13 | Güven eşikleri hangi rejime göre kalibre edilecek? (§11.7) | `config.py` |
-| 14 | **Ağırlıklı Jaccard denenmedi — C'de düz Jaccard ikisini de geçiyor (§11.5)** | `engine/query.py` |
+| 14 | **Ağırlıklı Jaccard sorgu yolunda ve vaka çalışmasında mevcut ama benchmark'a alınmadı — C'de düz Jaccard ikisini de geçiyor (§11.5)** | `engine/query.py` |
+| 16 | Kapsam düzeltmesinin C rejiminde açık/kapalı karşılaştırması (§7.5) | `evaluation/benchmark.py` |
+| 17 | Nadirlik düzeltmesinden sonra `binary`/`jaccard` kalibrasyonunun yeniden ölçümü (§7.7) | `evaluation/` |
 | 15 | Boyut yanlılığı zorlukla büyüyor (ρ: 0,46→0,77); raporda zaaf olarak yazılmalı (§11.6) | — |
 | 9 | Geçişli bağımlılıklar için lock dosyası (3.11 kurulumundan sonra) | `requirements.txt` |
 
@@ -395,14 +405,14 @@ Aktör başına top-1 ile teknik sayısı arasında Spearman **ρ = +0,523**. §
 ### 10.3 Sürüm kontrolü import anında yapılır
 **Kabul.** `ttp_similarity/pyversion.py`, `ttp_similarity/__init__.py` içinden import anında çağrılır ve yanlış sürümde `UnsupportedPythonError` fırlatır.
 
-Gerekçe: Tüm giriş noktaları (`python -m ttp_similarity...`, Streamlit uygulaması, `pytest`) paketi import eder; kontrolü buraya koymak, her giriş noktasına ayrı ayrı eklemekten daha güvenilirdir ve unutulamaz. Hata mesajı beklenen sürümü, bulunan sürümü, yorumlayıcı yolunu, sanal ortam durumunu ve platforma göre düzeltme komutlarını birlikte verir — "sessizce yanlış sürümde çalışmama" gereksinimi budur.
+Gerekçe: Tüm giriş noktaları (`python -m ttp_similarity...`, istasyon API'si, `pytest`) paketi import eder; kontrolü buraya koymak, her giriş noktasına ayrı ayrı eklemekten daha güvenilirdir ve unutulamaz. Hata mesajı beklenen sürümü, bulunan sürümü, yorumlayıcı yolunu, sanal ortam durumunu ve platforma göre düzeltme komutlarını birlikte verir — "sessizce yanlış sürümde çalışmama" gereksinimi budur.
 
 `pyversion.py` bilerek eski Python sözdizimiyle yazıldı (eşleştirme ifadesi yok, çalışma zamanı `X | Y` birleşimi yok, yalnızca standart kütüphane). Aksi halde 3.8 gibi bir sürümde "yanlış sürümdesiniz" demek yerine `SyntaxError` verirdi.
 
 **Kaçış kapısı:** `TTP_SIMILARITY_ALLOW_ANY_PYTHON=1` ortam değişkeni hatayı uyarıya indirir. Tek seferlik denemeler ve CI matris koşuları için vardır; **desteklenen bir yapılandırma değildir** ve uyarı bunu açıkça söyler. Kapıyı tamamen kapatmamanın gerekçesi: kontrolün kendisi bir hata yaptığında projenin tamamen kullanılamaz hâle gelmemesi.
 
 ### 10.4 Bağımlılıklar `==` ile sabitlenir
-**Kabul.** `requirements.txt` içindeki dokuz doğrudan bağımlılığın tamamı tam sürüme sabitlendi.
+**Kabul.** `requirements.txt` içindeki dokuz doğrudan bağımlılığın tamamı tam sürüme sabitlendi. 2026-10-09'da `streamlit`, `matplotlib` ve `seaborn` çıkarıldı (arayüz artık Svelte ile web/ altında); `fastapi`, `uvicorn` ve test için `httpx2` eklendi. Üçünün de Python 3.11 wheel'i doğrulandı. Arayüz bağımlılıkları `web/package-lock.json` ile birebir kilitlidir.
 
 Gerekçe: Aralık (`>=2.2,<3.0`) kullanıldığında iki kişi iki hafta arayla kurulum yaptığında farklı sürümler alır. Bu projede özellikle `numpy`/`scikit-learn` sürüm farkları benzerlik skorlarında küçük sayısal sapmalar yaratabilir; başarım testi sonuçlarının makineler arası karşılaştırılabilir olması buna bağlıdır.
 
@@ -497,4 +507,52 @@ Buna karşılık `binary` ve `jaccard` şemalarında sorguların %72–84'ü hâ
 **Açık (Karar 3'ün devamı):** Eşikler mevcut hâlleriyle smooth_idf + rejim C kombinasyonunda doğru çalışıyor. Kalibrasyonun hangi rejime göre yapılacağı — kolay (A) mı, gerçekçi (C) mi — bir ürün kararıdır ve verilmedi.
 
 ---
+
+---
+
+## 12. İstasyon: API ve arayüz kararları
+
+### 12.1 Streamlit yerine FastAPI + Svelte
+**Kabul (2026-10-09).** Streamlit her etkileşimde betiği baştan çalıştırır ve gömülü içeriği iframe'e hapseder; sürekli bir kamera, canlı yeniden sıralama ve sahneler arası geçiş bu modelde kurulamaz. Motor olduğu gibi kaldı; önüne ince bir FastAPI katmanı (`ttp_similarity/api/`) kondu, arayüz `web/` altında Svelte ile yazıldı.
+
+- **Arayüzde skorlama yok.** Her sayı motordan gelir (`service.Station`); API yalnızca motorun çıktısını arayüzün çizdiği şekillere dönüştürür. CLI ile arayüz aynı sonucu verir.
+- **Tek istek, tek istasyon.** `/api/station` bütün statik veriyi (aktörler, harita konumları, teknik kataloğu, takımyıldızlar; ~67 KB) bir kerede verir; sorgu `/api/query` ile ~6 ms'de döner.
+- **Harita konumları motorda hesaplanır.** `engine/layout.py`, kosinüs uzaklığı üzerinde sabit tohumlu metrik MDS ile `layout.csv` üretir. t-SNE yerine MDS: yapay adacıklar uydurmaz, global uzaklıklar dürüst kalır (sahte veride harita uzaklığı ile benzerlik arasında r ≈ 0,82).
+- **Kümeler adlandırılır.** Takımyıldız etiketi, kümenin en az yarısında görülen en yüksek lift'li tekniklerden üretilir; "Küme 0" gibi anlamsız etiket gösterilmez.
+
+### 12.2 Gerçek veri varsayılandır, sahte veri yalnızca test içindir
+**Kabul.** `paths.DEFAULT_DATASET = "attck"`. Arayüz sahte veri setini hiçbir yerde göstermez; `mock_dataset` birim ve API testlerinin fixture'ı olarak kalır.
+
+### 12.3 Hareket bir anlam taşır
+**Kabul.** Her animasyon bir veri değişimini anlatır: tekniğin tepsiye "ağırlığıyla" inmesi nadirliği, adayların yeniden sıralanması kanıtın etkisini, ayrışma çizgisi güvenin `margin` bileşenini, yıldızların ışıması skor alanını gösterir. Süre ve eğri token'ları tektir (`--t-fast/base/slow/epic`, `--ease-out`). `prefers-reduced-motion` açıkken bütün geçişler sadeleşir.
+
+### 12.4 Marka sahnesi bir yükleme ekranı değildir
+**Kabul.** YILDIZ CTI amblemi ve yazısı vektöre çevrildi (`web/src/lib/brand.js`). Açılış sahnesi:
+- sayfa açılır açılmaz başlar; veri paralel yüklenir ve sahne veriyi beklemez;
+- yalnızca sekme görünürken başlar, bitişi zamanlayıcıya değil son animasyona bağlıdır (arka plan sekmesinde kesilmez);
+- oturumdaki ilk açılışta tam (~3,9 sn), yenilemede ve paylaşılan bağlantıda kısa (~2,3 sn), azaltılmış harekette sade oynar; her zaman Esc/Enter/tık ile atlanabilir;
+- sonunda logo kaybolmaz: amblem ve yazı arayüzdeki gerçek yerlerine (giriş ekranı, sonra üst bar) süzülerek iner.
+
+### 12.5 Erişilebilirlik ve esneklik
+**Kabul.** Metin renkleri her zeminde WCAG AA'yı geçer (en düşük 4,93:1). Klavye odağı her zaman görünür. Dört düzen kademesi vardır (telefon < 640, tablet < 960, dizüstü < 1280, masaüstü); panel içi bileşenler konteyner sorgularıyla kendi genişliklerine uyum sağlar, dokunmatik hedefler en az 36–44 px'tir. Kütüphaneler ve fontlar pakete gömülüdür; istasyon internetten izole ortamda çalışır.
+
+### 12.6 Test katmanları
+**Kabul.** Python: `pytest` (155 test; motor, API, sözleşme, bütünlük). Arayüz: `vitest` (39 birim testi). Uçtan uca: `web/e2e` (25 senaryo; Chromium'u DevTools protokolüyle sürer; açılış sahnesi, sorgu, matris, dosya, karşılaştırma, odak modu, harita, güven, kör test, telefon düzeni). CI (`.github/workflows/ci.yml`) Python 3.11 testlerini, arayüz testlerini ve Docker imaj derlemesini çalıştırır; uçtan uca senaryolar gerçek ATT&CK verisi gerektirdiği için yerelde koşulur.
+
+---
+
+## 13. 2026-10-09 inceleme düzeltmeleri — özet
+
+| Konu | Önce | Sonra |
+|---|---|---|
+| Güven ve `top_k` | Aynı sorgu `top_k`'ya göre DÜŞÜK/ORTA | Bağımsız (§5.2) |
+| Kanıt payı | Doğrusal, yaygın teknik ~2× şişik | `w²`, skoru birebir yeniden üretir (§5.5) |
+| `binary` nadirliği | Sabit 1,0 | Veriden (§5.1) |
+| ATT&CK sürümü | `master` | `v19.2` (§2.1) |
+| `--coverage-correction` | Kapatılamıyordu | `--no-coverage-correction` |
+| Windows CLI | Yönlendirilen çıktıda `UnicodeEncodeError` | UTF-8 zorlanır |
+| `rank_actors` | Hep sahte veri | Gerçek veri, `dataset`/`artifacts` parametreli |
+| Arayüz | Streamlit paneli | İstasyon (§12) |
+
+Benchmark rejim sayıları (§11) düzeltmelerden sonra yeniden koşuldu ve birebir aynı çıktı (A 0,987 · B 0,939 · C 0,684; C kalibrasyonu YÜKSEK 0,950 · ORTA 0,611 · DÜŞÜK 0,304).
 

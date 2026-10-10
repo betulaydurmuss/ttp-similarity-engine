@@ -1,10 +1,10 @@
 """Load a built dataset + engine into one :class:`EngineArtifacts` object.
 
 Implemented, because it is pure glue over :mod:`ttp_similarity.storage` and it
-is what unblocks the app: the UI should never open individual files or know
+is what the API builds on: the UI should never open individual files or know
 which stage produced them.
 
-Owner: engine module. Called by: app, evaluation, engine CLI.
+Owner: engine module. Called by: api, evaluation, engine CLI.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from .. import paths, storage
+from . import weighting
 from ..schema import EngineArtifacts
 
 
@@ -60,6 +61,7 @@ def load_engine(
         space=space,
         similarity=similarity,
         clusters=clusters,
+        rarity_weights=weighting.rarity_weights(actors),
     )
 
 
@@ -69,8 +71,8 @@ def load_engine_cached(
 ) -> EngineArtifacts:
     """Memoised :func:`load_engine`, keyed by dataset.
 
-    The benchmark issues thousands of queries and the Streamlit app reruns its
-    script on every widget interaction; neither should re-read the matrices.
+    The benchmark issues thousands of queries and the API answers one per
+    keystroke; neither should re-read the matrices.
     Call :meth:`load_engine_cached.cache_clear` after a rebuild.
     """
     return load_engine(dataset, with_similarity=with_similarity)

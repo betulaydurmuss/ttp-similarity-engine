@@ -28,15 +28,13 @@ numpy==2.4.6
 scikit-learn==1.9.0
 scipy==1.17.1
 
-# --- gorsellestirme ---
-matplotlib==3.11.1
-seaborn==0.13.2
-
-# --- arayuz ---
-streamlit==1.63.0
+# --- istasyon API'si (arayuz web/ altinda, Node ile derlenir) ---
+fastapi==0.143.0
+uvicorn==0.54.0
 
 # --- MITRE ATT&CK STIX indirme ---
 requests==2.34.2
 
 # --- gelistirme / test (bilerek tek dosyada: ayrica bir dev dosyasi yok) ---
 pytest==8.4.2
+httpx2==2.13.1

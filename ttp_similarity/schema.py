@@ -18,6 +18,7 @@ artefact                    format      produced by
 ``vector_space.npz``        NPZ         engine     (:class:`VectorSpace`)
 ``similarity.npz``          NPZ         engine     (:class:`SimilarityMatrix`)
 ``clusters.csv``            CSV         engine     (:data:`CLUSTER_COLUMNS`)
+``layout.csv``              CSV         engine     (:data:`LAYOUT_COLUMNS`)
 ``evaluation.json``         JSON object evaluation (:class:`EvaluationReport`)
 =========================== =========== ======================================
 
@@ -95,6 +96,11 @@ CLUSTER_COLUMNS: tuple[str, ...] = (
     "actor_id",
     "actor_name",
     "cluster_id",  # -1 means "unassigned / noise"
+)
+LAYOUT_COLUMNS: tuple[str, ...] = (
+    "actor_id",
+    "x",
+    "y",
 )
 EVALUATION_TRIAL_COLUMNS: tuple[str, ...] = (
     "trial_id",
@@ -398,6 +404,7 @@ class EngineArtifacts:
     space: VectorSpace
     similarity: SimilarityMatrix | None = None
     clusters: Mapping[ActorId, int] | None = None
+    rarity_weights: Mapping[TechniqueId, float] | None = None
 
     def actor_by_id(self) -> dict[ActorId, Actor]:
         return {a.actor_id: a for a in self.actors}

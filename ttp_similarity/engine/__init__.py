@@ -8,6 +8,8 @@ Pipeline::
         -> similarity.compute_similarity()    similarity.npz
         -> clustering.cluster_actors()        clusters.csv
 
+        -> layout.compute_layout()            layout.csv
+
 Query path (reads the artefacts above, writes nothing)::
 
     loading.load_engine(ws) -> EngineArtifacts
@@ -26,6 +28,7 @@ from __future__ import annotations
 __all__ = [
     "build",
     "clustering",
+    "layout",
     "confidence",
     "loading",
     "query",
@@ -35,39 +38,62 @@ __all__ = [
     "rank_actors",
 ]
 
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
-def rank_actors(observed_techniques: str | Sequence[str], top_k: int = 5) -> list[dict[str, Any]]:
-    """Compare a list of observed techniques against known actors and rank the most similar ones.
-    
+if TYPE_CHECKING:
+    from ..schema import EngineArtifacts
+
+
+def rank_actors(
+    observed_techniques: str | Sequence[str],
+    top_k: int = 5,
+    *,
+    dataset: str | None = None,
+    artifacts: "EngineArtifacts | None" = None,
+) -> list[dict[str, Any]]:
+    """Rank the known actors most similar to a set of observed techniques.
+
     Args:
-        observed_techniques: List of ATT&CK technique IDs (e.g. ['T1059', 'T1566']).
-        top_k: Number of most similar candidates to return.
-        
+        observed_techniques: ATT&CK technique ids, as a list or a pasted blob.
+        top_k: Number of candidates to return.
+        dataset: Workspace to query; defaults to the real ATT&CK build.
+        artifacts: Pre-loaded engine artefacts, to skip loading from disk.
+
     Returns:
-        List of candidate dictionaries containing actor info, scores, confidence and evidence.
+        One dict per candidate. ``confidence_score`` / ``confidence_level``
+        describe the query as a whole (how far the top candidate stands out),
+        so every row carries the same value.
     """
+    from .. import paths
     from .query import query_techniques
-    
-    result = query_techniques(observed_techniques, top_k=top_k)
-    
-    out = []
-    for candidate in result.candidates:
-        out.append({
+
+    result = query_techniques(
+        observed_techniques,
+        artifacts,
+        dataset=dataset or paths.DEFAULT_DATASET,
+        top_k=top_k,
+    )
+    scored = len(result.query_technique_ids) - len(result.unknown_technique_ids)
+    return [
+        {
             "actor_id": candidate.actor_id,
             "actor_name": candidate.actor_name,
             "similarity_score": candidate.score,
             "confidence_score": result.confidence.score,
             "confidence_level": result.confidence.level.value,
-            "matched_techniques": candidate.matched_technique_ids,
+            "matched_techniques": list(candidate.matched_technique_ids),
             "match_count": len(candidate.matched_technique_ids),
-            "technique_coverage": len(candidate.matched_technique_ids) / len(result.query_technique_ids) if result.query_technique_ids else 0.0,
+            "technique_coverage": (
+                len(candidate.matched_technique_ids) / scored if scored else 0.0
+            ),
             "evidence": [
                 {
                     "technique_id": ev.technique_id,
                     "technique_name": ev.technique_name,
-                    "contribution": ev.contribution
-                } for ev in candidate.evidence
-            ]
-        })
-    return out
+                    "contribution": ev.contribution,
+                }
+                for ev in candidate.evidence
+            ],
+        }
+        for candidate in result.candidates
+    ]

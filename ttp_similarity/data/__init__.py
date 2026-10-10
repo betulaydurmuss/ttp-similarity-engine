@@ -6,11 +6,11 @@ Pipeline::
         -> stix_parse.parse_bundle()         ParsedBundle (in memory)
         -> normalize.normalize_bundle()      list[Actor] + technique catalogue
         -> frequency.compute_technique_frequency()
-        -> build.build_mitre_dataset()       data/processed/mitre/*
+        -> build.build_attck_dataset()       data/processed/attck/*
 
 The synthetic fixture follows the same contract and is produced by
-``mock_dataset.build_mock_dataset()`` into ``data/processed/mock/``, so the
-engine, evaluation and app modules can be built before ingestion is finished.
+``mock_dataset.build_mock_dataset()`` into ``data/processed/mock/``. It is a
+test fixture only; no user-facing entry point opens it by default.
 
 Owner: data module.
 """
