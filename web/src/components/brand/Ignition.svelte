@@ -233,7 +233,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: calc(var(--mark) * 0.1);
+    gap: calc(var(--mark) * 0.27);
   }
 
   .part {

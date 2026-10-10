@@ -156,17 +156,6 @@ cd web && npm run dev                  # arayüz: http://localhost:5173 (API'ye 
 | `Esc` | Açık katmanı kapat (matris → karşılaştırma → dosya → odak modu); açılış sahnesini atla |
 | `Enter` | Girişten gözleme geç; arama kutusunda öneriyi ya da yapıştırılan listeyi ekle |
 
-### Esnek düzen
-
-| Kademe | Genişlik | Düzen |
-|---|---|---|
-| Telefon | < 640 px | Tek sütun, ikonlu alt gezinti, sonuca götüren hap, dosya açılınca otomatik kaydırma |
-| Tablet | 640–959 px | Harita üstte, Gözlem ve Yörünge yan yana |
-| Dizüstü | 960–1279 px | Harita ortada, daralan paneller, odak modu |
-| Masaüstü | ≥ 1280 px | Harita ortada, geniş paneller; ≥ 1680 px'te daha da geniş |
-
-<p align="center"><img src="docs/screens/istasyon-telefon.webp" alt="Telefon görünümü" width="260"></p>
-
 Metin renkleri her zeminde WCAG AA'yı geçer, klavye odağı her zaman görünür, dokunmatik hedefler en az 36–44 px'tir, fontlar ve kütüphaneler pakete gömülüdür.
 
 ---
