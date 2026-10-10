@@ -120,7 +120,12 @@ cd web && npm run dev                  # arayüz: http://localhost:5173 (API'ye 
 
 ## İstasyon arayüzü
 
-<p align="center"><img src="docs/screens/yildiz-atesleme.webp" alt="YILDIZ açılış sahnesi" width="720"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/screens/yildiz-atesleme.webp">
+    <img src="docs/screens/yildiz-atesleme.gif" alt="YILDIZ açılış sahnesi" width="480">
+  </picture>
+</p>
 
 **Açılış.** YILDIZ amblemi ateşle oluşur: yıldız bir kıvılcımdan dönerek doğar, hilal-kartal silueti alev koronasıyla çizilir, harfler yükselir. Ardından amblem ve yazı arayüzdeki gerçek yerlerine süzülerek iner ve logonun yıldızı 149 aktör yıldızına patlar. Sahne veriyi beklemez; oturumdaki ilk açılışta tam (~3,9 sn), yenilemede ve paylaşılan bağlantıda kısa (~2,3 sn) oynar, her an `Esc` ile atlanabilir, azaltılmış hareket tercihine uyar.
 
