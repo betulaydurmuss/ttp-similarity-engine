@@ -15,11 +15,13 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from .. import __version__, paths
+from ..engine.query import normalize_query_input
 from .service import MAX_QUERY_TECHNIQUES, Station, UnknownActorError
 
 WEB_DIST: Path = paths.PROJECT_ROOT / "web" / "dist"
@@ -45,7 +47,8 @@ class QueryRequest(BaseModel):
     @field_validator("techniques")
     @classmethod
     def bounded(cls, value: Any) -> Any:
-        if isinstance(value, list) and len(value) > MAX_QUERY_TECHNIQUES:
+        count = len(value) if isinstance(value, list) else len(normalize_query_input(value))
+        if count > MAX_QUERY_TECHNIQUES:
             raise ValueError(f"at most {MAX_QUERY_TECHNIQUES} techniques per query")
         return value
 
@@ -84,6 +87,14 @@ def create_app(station: Station | None = None, *, dataset: str | None = None,
         if not request.url.path.startswith("/api/docs"):
             response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         return response
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError):
+        errors = [
+            {"loc": list(error.get("loc", ())), "msg": error.get("msg", ""), "type": error.get("type", "")}
+            for error in exc.errors()
+        ]
+        return JSONResponse({"detail": errors}, status_code=422)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

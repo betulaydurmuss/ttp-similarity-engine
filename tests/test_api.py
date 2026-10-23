@@ -100,6 +100,7 @@ def test_confidence_is_identical_whatever_top_k(client):
         {"techniques": ["T1566"] * 401},
         {"techniques": ["T" * 41]},
         {"techniques": "x" * 16_001},
+        {"techniques": " ".join(f"X{i}" for i in range(401))},
         {"techniques": ["T1566"], "top_k": 0},
         {"techniques": ["T1566"], "top_k": 51},
         {"top_k": 5},
@@ -107,6 +108,22 @@ def test_confidence_is_identical_whatever_top_k(client):
 )
 def test_query_input_is_bounded(client, payload):
     assert client.post("/api/query", json=payload).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/query", '{"techniques": ["T1566"], "top_k": 1e400}'),
+        ("/api/query", '{"techniques": ["T1566"], "top_k": NaN}'),
+        ("/api/noise", '{"techniques": ["T1566"], "ratio": Infinity}'),
+        ("/api/blind", '{"fraction": -Infinity}'),
+    ],
+)
+def test_non_finite_numbers_are_rejected_without_echoing_input(client, path, body):
+    response = client.post(path, content=body, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert all("input" not in error for error in response.json()["detail"])
 
 
 def test_dossier(client, station):
