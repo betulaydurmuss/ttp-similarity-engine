@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "docs" / "brand" / "source"
 INK_DARK = "#e9eef5"
 INK_LIGHT = "#0b0f17"
-STAR = "#ffb54a"
 VOID = "#04060a"
 
 
@@ -143,7 +142,7 @@ def main() -> None:
     (ROOT / "web/public/favicon.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -6 112 112">'
         f'<rect x="-6" y="-6" width="112" height="112" rx="22" fill="{VOID}"/>'
-        f'<path fill="{INK_DARK}" fill-rule="evenodd" d="{body}"/><path fill="{STAR}" d="{star}"/></svg>\n',
+        f'<path fill="{INK_DARK}" fill-rule="evenodd" d="{body}"/><path fill="{INK_DARK}" d="{star}"/></svg>\n',
         encoding="utf-8",
     )
 
@@ -164,7 +163,7 @@ def main() -> None:
     for name, ink in (("dark", INK_DARK), ("light", INK_LIGHT)):
         (ROOT / f"docs/brand/yildiz-lockup-{name}.svg").write_text(
             f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {total:.1f} 100" role="img" aria-label="YILDIZ CTI">'
-            f'<path fill="{ink}" fill-rule="evenodd" d="{body}"/><path fill="{STAR}" d="{star}"/>'
+            f'<path fill="{ink}" fill-rule="evenodd" d="{body}"/><path fill="{ink}" d="{star}"/>'
             f'<g fill="{ink}" fill-rule="evenodd" transform="translate(122 25) scale({scale})">{paths}</g></svg>\n',
             encoding="utf-8",
         )
