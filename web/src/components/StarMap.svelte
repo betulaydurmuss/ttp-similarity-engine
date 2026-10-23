@@ -81,6 +81,11 @@
     return placed;
   }
 
+  function overflowsRight(wx, text) {
+    const labelWidth = 12 + text.length * 7.2;
+    return wx * camera.k + camera.x + labelWidth > width - safe.right - 12;
+  }
+
   function topOf(points) {
     let best = points[0];
     for (const p of points) if (p[1] < best[1]) best = p;
@@ -384,13 +389,15 @@
           {/each}
         {/if}
         {#each labels as beam (beam.id)}
-          <text class="candidate-label" x={beam.x} y={beam.ly} dx="1em" dy="0.34em">
+          {@const flip = overflowsRight(beam.x, `00 ${beam.name}`)}
+          <text class="candidate-label" x={beam.x} y={beam.ly} dx={flip ? '-1em' : '1em'} dy="0.34em" text-anchor={flip ? 'end' : 'start'}>
             <tspan class="rank">{String(beam.rank).padStart(2, '0')}</tspan>
             {beam.name}
           </text>
         {/each}
         {#if focused && !ranked.has(focused.id)}
-          <text class="candidate-label" x={focused.wx} y={focused.wy} dx="1em" dy="0.34em">{focused.name}</text>
+          {@const flip = overflowsRight(focused.wx, focused.name)}
+          <text class="candidate-label" x={focused.wx} y={focused.wy} dx={flip ? '-1em' : '1em'} dy="0.34em" text-anchor={flip ? 'end' : 'start'}>{focused.name}</text>
         {/if}
       </g>
     </g>

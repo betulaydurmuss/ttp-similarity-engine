@@ -57,6 +57,7 @@ class NoiseRequest(BaseModel):
     techniques: list[Annotated[str, Field(max_length=40)]] = Field(max_length=MAX_QUERY_TECHNIQUES)
     ratio: float = Field(default=0.3, gt=0.0, le=1.0)
     seed: int | None = None
+    exclude_actor: Annotated[str, Field(pattern=ACTOR_ID_PATTERN)] | None = None
 
 
 class BlindRequest(BaseModel):
@@ -127,7 +128,10 @@ def create_app(station: Station | None = None, *, dataset: str | None = None,
 
     @app.post("/api/noise")
     def noise(body: NoiseRequest) -> dict[str, list[str]]:
-        return {"noise": station.noise(body.techniques, body.ratio, body.seed)}
+        try:
+            return {"noise": station.noise(body.techniques, body.ratio, body.seed, body.exclude_actor)}
+        except UnknownActorError:
+            raise HTTPException(status_code=404, detail="Bu kimlikte bir aktör yok.") from None
 
     @app.post("/api/blind")
     def blind(body: BlindRequest) -> dict[str, Any]:

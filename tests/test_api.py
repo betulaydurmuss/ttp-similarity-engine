@@ -171,6 +171,21 @@ def test_noise_never_repeats_the_query_and_is_reproducible(client):
     assert not set(first) & set(QUERY)
 
 
+def test_noise_can_exclude_the_hidden_actor(client, station):
+    blind = client.post("/api/blind", json={"fraction": 0.5, "seed": 5}).json()
+    actor = station.by_id[blind["answer"]["id"]]
+    for seed in range(20):
+        payload = {"techniques": blind["techniques"], "ratio": 1.0, "seed": seed, "exclude_actor": actor.actor_id.lower()}
+        noise = client.post("/api/noise", json=payload).json()["noise"]
+        assert noise
+        assert not set(noise) & set(actor.technique_ids)
+
+
+def test_noise_rejects_an_unknown_actor_to_exclude(client):
+    payload = {"techniques": QUERY, "exclude_actor": "G9999"}
+    assert client.post("/api/noise", json=payload).status_code == 404
+
+
 def test_blind_case_draws_from_the_answer_actor(client, station):
     body = client.post("/api/blind", json={"fraction": 0.5, "noise_ratio": 0.3, "seed": 5}).json()
     actor = station.by_id[body["answer"]["id"]]

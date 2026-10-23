@@ -19,7 +19,8 @@ export const api = {
     request('/api/query', { method: 'POST', body: { techniques, top_k: topK }, signal }),
   actor: (id) => request(`/api/actors/${encodeURIComponent(id)}`),
   compare: (a, b) => request(`/api/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
-  noise: (techniques, ratio) => request('/api/noise', { method: 'POST', body: { techniques, ratio } }),
+  noise: (techniques, ratio, excludeActor) =>
+    request('/api/noise', { method: 'POST', body: { techniques, ratio, exclude_actor: excludeActor } }),
   blind: (fraction, noiseRatio) =>
     request('/api/blind', { method: 'POST', body: { fraction, noise_ratio: noiseRatio } }),
   trust: () => request('/api/trust')

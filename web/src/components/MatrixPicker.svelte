@@ -1,15 +1,19 @@
 <script>
   import { fade, fly } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
   import { prefersReducedMotion } from 'svelte/motion';
   import { station } from '../lib/station.svelte.js';
-  import { heatColor } from '../lib/format.js';
+  import { heatColor, LEVELS, pct } from '../lib/format.js';
   import { fold } from '../lib/search.js';
 
   let filter = $state('');
   let dialog;
 
   const motion = $derived(prefersReducedMotion.current ? 0 : 1);
-  const chosen = $derived(new Set(station.query));
+  const signal = $derived(new Set(station.selected));
+  const noisy = $derived(new Set(station.noise));
+  const leaders = $derived((station.result?.candidates ?? []).slice(0, 3));
+  const level = $derived(station.result?.confidence.level ?? 'low');
   const needle = $derived(fold(filter).trim());
   const columns = $derived(
     (station.data?.tactics ?? []).map((tactic) => ({
@@ -58,10 +62,33 @@
         <i></i>
         <span>nadir</span>
       </div>
-      <span class="mono picked">{chosen.size} seçili</span>
+      <span class="mono picked">
+        {signal.size} seçili{#if noisy.size}<span class="noise-count">{' · '}{noisy.size} gürültü</span>{/if}
+      </span>
       <button class="btn btn--signal" onclick={close}>Tamam <span class="kbd">Esc</span></button>
     </div>
   </header>
+
+  <div class="live" aria-live="polite">
+    <span class="eyebrow">anlık sonuç</span>
+    {#if leaders.length}
+      {#each leaders as candidate (candidate.id)}
+        <span class="leader" class:first={candidate.rank === 1} animate:flip={{ duration: 320 * motion }}>
+          <span class="mono rank">{String(candidate.rank).padStart(2, '0')}</span>
+          {candidate.name}
+          <span class="mono score">{pct(candidate.score, 1)}</span>
+        </span>
+      {/each}
+      <span class="mono level level--{level}">güven {LEVELS[level].label}</span>
+    {:else if station.result}
+      <span class="hint">Bu teknik setiyle eşleşen bir aktör yok.</span>
+    {:else}
+      <span class="hint">Teknik seç; en yakın aktörler burada anında sıralanır.</span>
+    {/if}
+    {#if station.busy}
+      <span class="mono busy" transition:fade={{ duration: 150 }}>tarıyor…</span>
+    {/if}
+  </div>
 
   <div class="grid scroll">
     {#each columns as column, ci (column.id)}
@@ -73,11 +100,14 @@
         {#each column.techniques as t (t.id)}
           <button
             class="cell"
-            class:on={chosen.has(t.id)}
+            class:on={signal.has(t.id)}
+            class:noise={noisy.has(t.id)}
             class:muted={!matches(t)}
             style:--heat={heatColor(t.heat)}
-            title="{t.id} {t.name} — {t.actor_count} aktörde"
-            aria-pressed={chosen.has(t.id)}
+            title={noisy.has(t.id)
+              ? `${t.id} ${t.name} — enjekte gürültü; tıkla: gözlem olarak işaretle`
+              : `${t.id} ${t.name} — ${t.actor_count} aktörde`}
+            aria-pressed={signal.has(t.id) ? 'true' : noisy.has(t.id) ? 'mixed' : 'false'}
             onclick={() => station.toggle(t.id)}
           >
             <span class="mono">{t.id}</span>
@@ -167,6 +197,78 @@
     color: var(--signal);
   }
 
+  .noise-count {
+    color: var(--ink-3);
+  }
+
+  .live {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    min-height: 44px;
+    padding: 8px 24px;
+    border-bottom: 1px solid var(--seam);
+    background: var(--hull-2);
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+
+  .live .eyebrow {
+    margin-right: 2px;
+  }
+
+  .leader {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .leader.first {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .leader .rank,
+  .leader .score {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--ink-3);
+  }
+
+  .leader.first .rank {
+    color: var(--signal);
+  }
+
+  .level {
+    margin-left: auto;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+  }
+
+  .level--high {
+    color: var(--lock);
+  }
+
+  .level--medium {
+    color: var(--signal);
+  }
+
+  .level--low {
+    color: var(--danger);
+  }
+
+  .busy {
+    font-size: 11.5px;
+    color: var(--ink-3);
+  }
+
+  .hint {
+    color: var(--ink-3);
+  }
+
   .grid {
     flex: 1;
     display: grid;
@@ -251,6 +353,16 @@
     color: var(--void);
   }
 
+  .cell.noise {
+    background: var(--signal-soft);
+    border: 1px dashed var(--signal-line);
+    border-left: 3px dashed var(--signal);
+  }
+
+  .cell.noise .label {
+    color: var(--ink);
+  }
+
   .cell.muted {
     opacity: 0.16;
   }
@@ -283,6 +395,9 @@
     }
     h2 {
       font-size: 18px;
+    }
+    .live {
+      padding: 8px 16px;
     }
     .tools {
       flex-wrap: wrap;
