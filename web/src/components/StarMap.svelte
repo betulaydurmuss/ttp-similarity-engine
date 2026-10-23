@@ -58,6 +58,9 @@
   const resultStamp = $derived(
     station.result ? station.result.candidates.map((c) => c.id).slice(0, 5).join('|') + station.result.query.known.join(',') : ''
   );
+  let replay = $state(0);
+  let stampAtOpen = null;
+  const drawStamp = $derived(`${resultStamp}#${replay}`);
   const ranked = $derived(new Map((station.result?.candidates ?? []).map((c) => [c.id, c.rank])));
   const labels = $derived(placeLabels(beams, camera.k));
   const hovered = $derived(station.hover ? worldById.get(station.hover) : null);
@@ -185,12 +188,31 @@
     untrack(paintSky);
   });
 
+  function showResult() {
+    if (!station.result?.candidates?.length) fitAll(900);
+    else fitResult(1100);
+  }
+
   $effect(() => {
     resultStamp;
     untrack(() => {
-      if (!settled || station.dossierId) return;
-      if (!station.result?.candidates?.length) fitAll(900);
-      else fitResult(1100);
+      if (!settled || station.dossierId || station.matrixOpen) return;
+      showResult();
+    });
+  });
+
+  $effect(() => {
+    const open = station.matrixOpen;
+    untrack(() => {
+      if (open) {
+        stampAtOpen = resultStamp;
+        return;
+      }
+      if (stampAtOpen !== null && stampAtOpen !== resultStamp && settled && !station.dossierId) {
+        replay += 1;
+        showResult();
+      }
+      stampAtOpen = null;
     });
   });
 
@@ -291,7 +313,7 @@
       </g>
 
       {#if probe}
-        {#key resultStamp}
+        {#key drawStamp}
           <g class="beams">
             {#each beams as beam (beam.id)}
               <line
@@ -342,7 +364,7 @@
 
       {#if probe}
         <g class="probe" transform="translate({probe[0]},{probe[1]})">
-          {#key resultStamp}
+          {#key drawStamp}
             <circle class="ping" />
             <circle class="ping ping--late" />
           {/key}

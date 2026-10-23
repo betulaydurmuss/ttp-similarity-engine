@@ -107,6 +107,23 @@ await check('M matrisi açar; hücre seçimi sorguyu değiştirir; Esc kapatır'
   await waitFor(`!document.querySelector('.matrix')`);
   return `${columns} taktik sütunu`;
 });
+await check('matris açıkken değişen sonuç, matris kapanınca haritada yeniden çizilir', async () => {
+  await waitFor(`document.querySelectorAll('.beams line').length > 0`);
+  await click('.tools .btn', 'Matristen seç');
+  await waitFor(`document.querySelector('.matrix')`);
+  await click('.matrix .cell', 'T1190');
+  await waitFor(`document.querySelectorAll('.tray li').length === 10`);
+  await b.sleep(900);
+  await q(`document.querySelector('.beams').dataset.stale = '1', true`);
+  await b.key('Escape');
+  await waitFor(`!document.querySelector('.matrix')`);
+  await waitFor(`document.querySelector('.beams') && !document.querySelector('.beams').dataset.stale`);
+  const labels = await q(`[...document.querySelectorAll('.candidate-label')].map(t => t.textContent.trim()).sort().join(', ')`);
+  await q(`[...document.querySelectorAll('.tray li')].find(li => li.textContent.includes('T1190')).querySelector('button').click(), true`);
+  await waitFor(`document.querySelectorAll('.tray li').length === 9`);
+  await waitFor(`[...document.querySelectorAll('.list li')].some(li => li.textContent.includes('HEXANE'))`);
+  return labels;
+});
 await check('aday satırı aktör dosyasını açar', async () => {
   await click('.list li button', 'HEXANE');
   await waitFor(`document.querySelector('.drawer h2')`);
