@@ -179,7 +179,7 @@
       actor: station.dossierId,
       mode: station.mode
     });
-    if (hashReady && hash !== location.hash) {
+    if (hashReady && (hash !== location.hash || location.href.endsWith('#'))) {
       history.replaceState(null, '', hash || location.pathname + location.search);
     }
   });
@@ -242,6 +242,20 @@
     }
   }
 
+  function goHome() {
+    document.activeElement?.blur?.();
+    station.clear();
+    station.closeDossier();
+    station.comparison = null;
+    station.matrixOpen = false;
+    station.focus = false;
+    station.mode = 'observe';
+    station.recenter();
+    quickArrival = true;
+    arrival = true;
+    if (compact) window.scrollTo({ top: 0 });
+  }
+
   function choose(action) {
     remember();
     flyBrand(
@@ -286,7 +300,7 @@
 
   {#if station.data}
     <div class="bar-wrap">
-      <TopBar {compact} visible={!arrival} />
+      <TopBar {compact} visible={!arrival} onhome={goHome} />
     </div>
   {/if}
 

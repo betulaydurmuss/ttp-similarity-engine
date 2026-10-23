@@ -45,7 +45,7 @@ class Station {
   }
 
   add(ids) {
-    const fresh = ids.filter((id) => this.vocabulary.has(id) && !this.selected.includes(id));
+    const fresh = [...new Set(ids)].filter((id) => this.vocabulary.has(id) && !this.selected.includes(id));
     if (fresh.length) {
       this.selected = [...this.selected, ...fresh];
       this.noise = this.noise.filter((id) => !fresh.includes(id));
@@ -84,7 +84,7 @@ class Station {
   async injectNoise(ratio = 0.3) {
     if (!this.selected.length) return;
     const { noise } = await api.noise(this.selected, ratio);
-    this.noise = [...new Set([...this.noise, ...noise])].filter((id) => !this.selected.includes(id));
+    this.noise = noise.filter((id) => !this.selected.includes(id));
   }
 
   async startBlind(noiseRatio = 0) {

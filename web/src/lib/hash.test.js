@@ -17,6 +17,12 @@ describe('hash state', () => {
     expect(readHash('#q=t1566,t1078').techniques).toEqual(['T1566', 'T1078']);
   });
 
+  it('drops duplicate ids, including ones that differ only in case', () => {
+    const state = readHash('#q=T1566,T1566,t1566,T1078&n=T1059,t1059');
+    expect(state.techniques).toEqual(['T1566', 'T1078']);
+    expect(state.noise).toEqual(['T1059']);
+  });
+
   it('drops unsafe tokens instead of passing them through', () => {
     const state = readHash('#q=T1566,<script>,T1078&a=<img>&m=hack');
     expect(state.techniques).toEqual(['T1566', 'T1078']);

@@ -170,6 +170,27 @@ await check('gürültü enjeksiyonu kesikli tepsiye ekler', async () => {
   await waitFor(`document.querySelectorAll('.tray li.injected').length > 0`);
   return `${before} → ${await q(`document.querySelectorAll('.tray li').length`)}`;
 });
+await check('gürültü enjeksiyonu tekrar basınca birikmez', async () => {
+  const first = await q(`document.querySelectorAll('.tray li.injected').length`);
+  await click('.tools .btn', 'Gürültü enjekte');
+  await b.sleep(600);
+  const second = await q(`document.querySelectorAll('.tray li.injected').length`);
+  if (second !== first) throw new Error(`${first} → ${second}`);
+  return `${first} → ${second}`;
+});
+await check('logo giriş ekranına döner ve adresi temizler', async () => {
+  await click('a.lockup');
+  await waitFor(`document.querySelector('.arrival')`);
+  const href = await q(`location.href`);
+  if (href !== new URL('/', BASE).href) throw new Error(href);
+  return href;
+});
+await check('giriş ekranında odaktaki düğmeye Enter o düğmeyi çalıştırır', async () => {
+  await q(`[...document.querySelectorAll('.arrival .cta button')].find(e => e.textContent.includes('Haritayı gez')).focus(), true`);
+  await b.key('Enter');
+  await waitFor(`!document.querySelector('.arrival') && location.hash === '#m=explore'`);
+  return await q(`location.hash`);
+});
 await check('masaüstünde konsol hatası yok', async () => {
   if (b.errors.length) throw new Error(b.errors.join(' | '));
   return 'temiz';

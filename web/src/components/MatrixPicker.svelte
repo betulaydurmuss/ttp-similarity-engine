@@ -3,13 +3,14 @@
   import { prefersReducedMotion } from 'svelte/motion';
   import { station } from '../lib/station.svelte.js';
   import { heatColor } from '../lib/format.js';
+  import { fold } from '../lib/search.js';
 
   let filter = $state('');
   let dialog;
 
   const motion = $derived(prefersReducedMotion.current ? 0 : 1);
   const chosen = $derived(new Set(station.query));
-  const needle = $derived(filter.trim().toLocaleLowerCase('tr'));
+  const needle = $derived(fold(filter).trim());
   const columns = $derived(
     (station.data?.tactics ?? []).map((tactic) => ({
       ...tactic,
@@ -21,7 +22,7 @@
 
   function matches(t) {
     if (!needle) return true;
-    return t.id.toLowerCase().includes(needle) || t.name.toLocaleLowerCase('tr').includes(needle);
+    return t.id.toLowerCase().includes(needle) || fold(t.name).includes(needle);
   }
 
   function close() {

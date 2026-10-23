@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchedAlias, searchActors, searchTechniques } from './search.js';
+import { fold, matchedAlias, searchActors, searchTechniques } from './search.js';
 
 const techniques = [
   { id: 'T1566', name: 'Phishing', heat: 0.2 },
@@ -41,6 +41,14 @@ describe('searchTechniques', () => {
   it('returns nothing for blank input and respects the limit', () => {
     expect(searchTechniques(techniques, '   ')).toEqual([]);
     expect(searchTechniques(techniques, 'T1', 2)).toHaveLength(2);
+  });
+});
+
+describe('fold', () => {
+  it('lets an English name match whether it is typed with i, I or İ', () => {
+    for (const typed of ['ingress', 'Ingress', 'INGRESS', 'İngress', 'ıngress']) {
+      expect(fold('Ingress Tool Transfer').includes(fold(typed))).toBe(true);
+    }
   });
 });
 

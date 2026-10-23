@@ -3,7 +3,7 @@
   import Emblem from './brand/Emblem.svelte';
   import Wordmark from './brand/Wordmark.svelte';
 
-  let { compact = false, visible = true } = $props();
+  let { compact = false, visible = true, onhome } = $props();
 
   const modes = [
     { id: 'observe', label: 'Gözlem', hint: 'Gözlenen teknikleri bilinen aktörlerle karşılaştır', icon: 'M4 12h4l2-6 4 12 2-6h4' },
@@ -20,17 +20,15 @@
   }
 
   function home(event) {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    station.mode = 'observe';
-    station.focus = false;
-    station.closeDossier();
-    station.recenter();
+    onhome?.();
   }
 </script>
 
 <header class="bar" class:compact class:hidden={!visible} aria-hidden={visible ? undefined : 'true'}>
   <div class="brand">
-    <a class="lockup" href="#" aria-label="YILDIZ CTI — başa dön" onclick={home} data-brand-slot="bar" tabindex={visible ? undefined : -1}>
+    <a class="lockup" href="/" aria-label="YILDIZ CTI — başa dön" onclick={home} data-brand-slot="bar" tabindex={visible ? undefined : -1}>
       <span class="part" data-brand="emblem"><Emblem size={compact ? 28 : 32} twinkle /></span>
       <span class="part" data-brand="word"><Wordmark height={compact ? 15 : 17} /></span>
     </a>

@@ -35,6 +35,7 @@
       }, delay)
     );
     const onKey = (event) => {
+      if (event.key === 'Enter' && event.target?.closest?.('button, a')) return;
       if (event.key === 'Escape' || event.key === 'Enter') onchoose('observe');
     };
     window.addEventListener('keydown', onKey);
