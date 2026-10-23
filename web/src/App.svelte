@@ -169,6 +169,10 @@
   });
 
   $effect(() => {
+    if (station.mode !== 'explore') station.constellationFocus = null;
+  });
+
+  $effect(() => {
     const hash = writeHash({
       techniques: station.selected,
       noise: station.noise,
@@ -225,6 +229,7 @@
       station.focus = false;
       tick().then(() => searchInput?.focus());
     } else if (event.key === 'm' || event.key === 'M') {
+      event.preventDefault();
       station.mode = 'observe';
       station.matrixOpen = !station.matrixOpen;
     } else if ((event.key === 'f' || event.key === 'F') && !compact) {

@@ -16,7 +16,6 @@
   function choose(id) {
     station.mode = id;
     if (id === 'trust') station.loadTrust();
-    if (id !== 'explore') station.constellationFocus = null;
     if (compact) window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
