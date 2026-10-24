@@ -175,7 +175,8 @@
     </svg>
 
     <p class="tagline mono" onanimationend={(event) => event.animationName.includes('rise') && (revealed = true)}>
-      CTI · TTP BENZERLİK İSTASYONU
+      <span class="discipline">SİBER TEHDİT İSTİHBARATI</span>
+      <span>TTP BENZERLİK İSTASYONU</span>
     </p>
     <p class="waiting mono" aria-live="polite">{revealed && !ready ? 'istasyon bağlanıyor…' : ''}</p>
   </div>
@@ -366,10 +367,19 @@
   }
 
   .tagline {
+    display: grid;
+    justify-items: center;
+    gap: 0.75em;
     margin: calc(var(--mark) * 0.08) 0 0;
+    padding-left: 0.34em;
     font-size: clamp(10.5px, 1.7vmin, 13px);
     letter-spacing: 0.34em;
+    text-align: center;
     color: var(--ink-3);
+  }
+
+  .discipline {
+    color: var(--ink-2);
   }
 
   .waiting {
