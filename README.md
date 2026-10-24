@@ -123,6 +123,7 @@ cd web && npm run dev                  # arayüz: http://localhost:5173 (API'ye 
 <p align="center">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="docs/screens/yildiz-atesleme.webp">
+    <source srcset="docs/screens/yildiz-atesleme-anim.webp" type="image/webp">
     <img src="docs/screens/yildiz-atesleme.gif" alt="YILDIZ açılış sahnesi" width="480">
   </picture>
 </p>
