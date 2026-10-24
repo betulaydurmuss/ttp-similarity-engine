@@ -8,7 +8,7 @@
   import { station } from '../lib/station.svelte.js';
   import { fitTransform, paddedHull, smoothPath, toWorld, WORLD } from '../lib/geometry.js';
   import { pct } from '../lib/format.js';
-  import { EMBLEM_BODY } from '../lib/brand.js';
+  import { EMBLEM_BODY, EMBLEM_STAR } from '../lib/brand.js';
 
   let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, hold = false, dim = false, controls = true } = $props();
 
@@ -336,7 +336,10 @@
         {/key}
       {/if}
 
-      <path class="hub" class:held={hold} d={EMBLEM_BODY} fill-rule="evenodd" transform="translate(-70 -70) scale(1.4)" />
+      <g class="hub" class:held={hold} transform="translate(-70 -70) scale(1.4)">
+        <path d={EMBLEM_BODY} fill-rule="evenodd" />
+        <path d={EMBLEM_STAR} />
+      </g>
 
       <g class="stars" class:held={hold}>
         {#each actors as actor (actor.id)}
