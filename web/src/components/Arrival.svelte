@@ -35,6 +35,7 @@
       }, delay)
     );
     const onKey = (event) => {
+      if (event.key === 'Enter' && event.target?.closest?.('button, a')) return;
       if (event.key === 'Escape' || event.key === 'Enter') onchoose('observe');
     };
     window.addEventListener('keydown', onKey);
@@ -53,7 +54,8 @@
       <span class="hero-word" data-brand="word"><Wordmark height={32} /></span>
     </div>
     <p class="eyebrow source" class:on={phase >= 1}>
-      CTI · MITRE ATT&CK Enterprise v{data.dataset.attack_version ?? '?'}
+      <span>Siber tehdit istihbaratı ·</span>
+      <span lang="en">MITRE ATT&CK Enterprise v{data.dataset.attack_version ?? '?'}</span>
     </p>
     <h1 id="arrival-title" class:on={phase >= 1}>
       <span class="line">TTP Benzerlik</span>
@@ -137,6 +139,10 @@
 
   .source {
     margin: clamp(10px, 1.8vh, 16px) 0 0;
+  }
+
+  .source span {
+    white-space: nowrap;
   }
 
   .eyebrow,

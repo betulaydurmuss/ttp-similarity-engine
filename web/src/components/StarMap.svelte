@@ -8,7 +8,7 @@
   import { station } from '../lib/station.svelte.js';
   import { fitTransform, paddedHull, smoothPath, toWorld, WORLD } from '../lib/geometry.js';
   import { pct } from '../lib/format.js';
-  import { EMBLEM_BODY } from '../lib/brand.js';
+  import { EMBLEM_BODY, EMBLEM_STAR } from '../lib/brand.js';
 
   let { safe = { left: 0, right: 0, top: 0, bottom: 0 }, intro = false, hold = false, dim = false, controls = true } = $props();
 
@@ -58,6 +58,9 @@
   const resultStamp = $derived(
     station.result ? station.result.candidates.map((c) => c.id).slice(0, 5).join('|') + station.result.query.known.join(',') : ''
   );
+  let replay = $state(0);
+  let stampAtOpen = null;
+  const drawStamp = $derived(`${resultStamp}#${replay}`);
   const ranked = $derived(new Map((station.result?.candidates ?? []).map((c) => [c.id, c.rank])));
   const labels = $derived(placeLabels(beams, camera.k));
   const hovered = $derived(station.hover ? worldById.get(station.hover) : null);
@@ -76,6 +79,11 @@
       placed.push({ ...item, ly: y });
     }
     return placed;
+  }
+
+  function overflowsRight(wx, text) {
+    const labelWidth = 12 + text.length * 7.2;
+    return wx * camera.k + camera.x + labelWidth > width - safe.right - 12;
   }
 
   function topOf(points) {
@@ -185,12 +193,31 @@
     untrack(paintSky);
   });
 
+  function showResult() {
+    if (!station.result?.candidates?.length) fitAll(900);
+    else fitResult(1100);
+  }
+
   $effect(() => {
     resultStamp;
     untrack(() => {
-      if (!settled || station.dossierId) return;
-      if (!station.result?.candidates?.length) fitAll(900);
-      else fitResult(1100);
+      if (!settled || station.dossierId || station.matrixOpen) return;
+      showResult();
+    });
+  });
+
+  $effect(() => {
+    const open = station.matrixOpen;
+    untrack(() => {
+      if (open) {
+        stampAtOpen = resultStamp;
+        return;
+      }
+      if (stampAtOpen !== null && stampAtOpen !== resultStamp && settled && !station.dossierId) {
+        replay += 1;
+        showResult();
+      }
+      stampAtOpen = null;
     });
   });
 
@@ -291,7 +318,7 @@
       </g>
 
       {#if probe}
-        {#key resultStamp}
+        {#key drawStamp}
           <g class="beams">
             {#each beams as beam (beam.id)}
               <line
@@ -309,7 +336,10 @@
         {/key}
       {/if}
 
-      <path class="hub" class:held={hold} d={EMBLEM_BODY} fill-rule="evenodd" transform="translate(-70 -70) scale(1.4)" />
+      <g class="hub" class:held={hold} transform="translate(-70 -70) scale(1.4)">
+        <path d={EMBLEM_BODY} fill-rule="evenodd" />
+        <path d={EMBLEM_STAR} />
+      </g>
 
       <g class="stars" class:held={hold}>
         {#each actors as actor (actor.id)}
@@ -342,7 +372,7 @@
 
       {#if probe}
         <g class="probe" transform="translate({probe[0]},{probe[1]})">
-          {#key resultStamp}
+          {#key drawStamp}
             <circle class="ping" />
             <circle class="ping ping--late" />
           {/key}
@@ -362,13 +392,15 @@
           {/each}
         {/if}
         {#each labels as beam (beam.id)}
-          <text class="candidate-label" x={beam.x} y={beam.ly} dx="1em" dy="0.34em">
+          {@const flip = overflowsRight(beam.x, `00 ${beam.name}`)}
+          <text class="candidate-label" x={beam.x} y={beam.ly} dx={flip ? '-1em' : '1em'} dy="0.34em" text-anchor={flip ? 'end' : 'start'}>
             <tspan class="rank">{String(beam.rank).padStart(2, '0')}</tspan>
             {beam.name}
           </text>
         {/each}
         {#if focused && !ranked.has(focused.id)}
-          <text class="candidate-label" x={focused.wx} y={focused.wy} dx="1em" dy="0.34em">{focused.name}</text>
+          {@const flip = overflowsRight(focused.wx, focused.name)}
+          <text class="candidate-label" x={focused.wx} y={focused.wy} dx={flip ? '-1em' : '1em'} dy="0.34em" text-anchor={flip ? 'end' : 'start'}>{focused.name}</text>
         {/if}
       </g>
     </g>

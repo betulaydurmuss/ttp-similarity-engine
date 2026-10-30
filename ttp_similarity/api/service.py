@@ -377,14 +377,26 @@ class Station:
         }
 
     def noise(
-        self, techniques: Sequence[str], ratio: float, seed: int | None = None
+        self,
+        techniques: Sequence[str],
+        ratio: float,
+        seed: int | None = None,
+        exclude_actor: str | None = None,
     ) -> list[str]:
-        """Prevalence-weighted foreign techniques, as the benchmark's regime C injects."""
+        """Prevalence-weighted foreign techniques, as the benchmark's regime C injects.
+
+        ``exclude_actor`` keeps that actor's own techniques out of the draw, so
+        noise injected during a blind test never hands the hidden actor's
+        behaviour back to the query.
+        """
         current = set(normalize_technique_ids(techniques))
         count = max(1, int(round(len(current) * ratio)))
+        excluded = set(current)
+        if exclude_actor:
+            excluded |= set(self.by_id[self.resolve(exclude_actor)].technique_ids)
         rng = random.Random(seed)
         return list(
-            sampling.sample_noise(current, count, dict(self.actor_counts), rng)
+            sampling.sample_noise(excluded, count, dict(self.actor_counts), rng)
         )
 
     def blind_case(

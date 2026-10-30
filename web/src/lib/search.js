@@ -1,4 +1,4 @@
-function fold(value) {
+export function fold(value) {
   return String(value ?? '')
     .toLocaleLowerCase('tr')
     .normalize('NFD')

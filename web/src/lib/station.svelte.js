@@ -3,6 +3,10 @@ import { parseTechniques } from './parse.js';
 
 export const TOP_K = 10;
 
+function queryKey(ids) {
+  return [...ids].sort().join(',');
+}
+
 class Station {
   data = $state(null);
   error = $state(null);
@@ -35,6 +39,7 @@ class Station {
   vocabulary = $derived(new Set(this.techniques.keys()));
   query = $derived([...this.selected, ...this.noise]);
   candidateIds = $derived(new Set((this.result?.candidates ?? []).map((c) => c.id)));
+  blindModified = $derived(this.blind ? queryKey(this.query) !== this.blind.original : false);
 
   async load() {
     try {
@@ -45,7 +50,7 @@ class Station {
   }
 
   add(ids) {
-    const fresh = ids.filter((id) => this.vocabulary.has(id) && !this.selected.includes(id));
+    const fresh = [...new Set(ids)].filter((id) => this.vocabulary.has(id) && !this.selected.includes(id));
     if (fresh.length) {
       this.selected = [...this.selected, ...fresh];
       this.noise = this.noise.filter((id) => !fresh.includes(id));
@@ -68,7 +73,7 @@ class Station {
   }
 
   toggle(id) {
-    if (this.selected.includes(id) || this.noise.includes(id)) this.remove(id);
+    if (this.selected.includes(id)) this.remove(id);
     else this.add([id]);
   }
 
@@ -83,8 +88,8 @@ class Station {
 
   async injectNoise(ratio = 0.3) {
     if (!this.selected.length) return;
-    const { noise } = await api.noise(this.selected, ratio);
-    this.noise = [...new Set([...this.noise, ...noise])].filter((id) => !this.selected.includes(id));
+    const { noise } = await api.noise(this.selected, ratio, this.blind?.answer.id);
+    this.noise = noise.filter((id) => !this.selected.includes(id));
   }
 
   async startBlind(noiseRatio = 0) {
@@ -92,7 +97,13 @@ class Station {
     this.clear();
     this.mode = 'observe';
     this.closeDossier();
-    this.blind = { answer: blind.answer, revealed: false, noisy: noiseRatio > 0 };
+    this.blind = {
+      answer: blind.answer,
+      revealed: false,
+      noisy: noiseRatio > 0,
+      original: queryKey([...blind.techniques, ...blind.noise]),
+      originalRank: undefined
+    };
     this.selected = blind.techniques;
     this.noise = blind.noise;
   }
@@ -106,6 +117,10 @@ class Station {
     for (const c of this.result?.candidates ?? []) ranks[c.id] = c.rank;
     this.previousRanks = ranks;
     this.result = result;
+    if (this.blind && this.blind.originalRank === undefined && queryKey(result.query.techniques) === this.blind.original) {
+      const rank = result.candidates.find((c) => c.id === this.blind.answer.id)?.rank ?? null;
+      this.blind = { ...this.blind, originalRank: rank };
+    }
   }
 
   async openDossier(id) {

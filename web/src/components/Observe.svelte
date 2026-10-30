@@ -62,7 +62,7 @@
     <button
       class="btn"
       disabled={!station.selected.length || working}
-      title="Benchmark'taki gürültülü rejim gibi: yaygınlığa göre seçilmiş, sorguya ait olmayan teknikler ekler"
+      title="Benchmark'taki gürültülü rejim gibi: yaygınlığa göre seçilmiş, sorguya ait olmayan teknikler ekler. Her basış gürültüyü yeniden çeker; miktar seçili tekniklerin %30'unda kalır."
       onclick={() => run(() => station.injectNoise(0.3))}
     >
       Gürültü enjekte et

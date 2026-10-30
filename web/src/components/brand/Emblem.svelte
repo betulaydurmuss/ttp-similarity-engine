@@ -26,7 +26,7 @@
   }
 
   .star {
-    fill: var(--signal);
+    fill: currentColor;
     transform-box: view-box;
   }
 
@@ -39,7 +39,7 @@
   @keyframes twinkle {
     35% {
       transform: rotate(72deg) scale(1.3);
-      filter: drop-shadow(0 0 2px #ffb54a);
+      filter: drop-shadow(0 0 2px currentColor);
     }
     100% {
       transform: rotate(144deg) scale(1);

@@ -169,13 +169,17 @@
   });
 
   $effect(() => {
+    if (station.mode !== 'explore') station.constellationFocus = null;
+  });
+
+  $effect(() => {
     const hash = writeHash({
       techniques: station.selected,
       noise: station.noise,
       actor: station.dossierId,
       mode: station.mode
     });
-    if (hashReady && hash !== location.hash) {
+    if (hashReady && (hash !== location.hash || location.href.endsWith('#'))) {
       history.replaceState(null, '', hash || location.pathname + location.search);
     }
   });
@@ -225,6 +229,7 @@
       station.focus = false;
       tick().then(() => searchInput?.focus());
     } else if (event.key === 'm' || event.key === 'M') {
+      event.preventDefault();
       station.mode = 'observe';
       station.matrixOpen = !station.matrixOpen;
     } else if ((event.key === 'f' || event.key === 'F') && !compact) {
@@ -235,6 +240,20 @@
       else if (station.dossierId) station.closeDossier();
       else if (station.focus) station.focus = false;
     }
+  }
+
+  function goHome() {
+    document.activeElement?.blur?.();
+    station.clear();
+    station.closeDossier();
+    station.comparison = null;
+    station.matrixOpen = false;
+    station.focus = false;
+    station.mode = 'observe';
+    station.recenter();
+    quickArrival = true;
+    arrival = true;
+    if (compact) window.scrollTo({ top: 0 });
   }
 
   function choose(action) {
@@ -281,7 +300,7 @@
 
   {#if station.data}
     <div class="bar-wrap">
-      <TopBar {compact} visible={!arrival} />
+      <TopBar {compact} visible={!arrival} onhome={goHome} />
     </div>
   {/if}
 

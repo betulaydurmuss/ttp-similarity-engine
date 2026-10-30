@@ -537,7 +537,7 @@ Buna karşılık `binary` ve `jaccard` şemalarında sorguların %72–84'ü hâ
 **Kabul.** Metin renkleri her zeminde WCAG AA'yı geçer (en düşük 4,93:1). Klavye odağı her zaman görünür. Dört düzen kademesi vardır (telefon < 640, tablet < 960, dizüstü < 1280, masaüstü); panel içi bileşenler konteyner sorgularıyla kendi genişliklerine uyum sağlar, dokunmatik hedefler en az 36–44 px'tir. Kütüphaneler ve fontlar pakete gömülüdür; istasyon internetten izole ortamda çalışır.
 
 ### 12.6 Test katmanları
-**Kabul.** Python: `pytest` (155 test; motor, API, sözleşme, bütünlük). Arayüz: `vitest` (39 birim testi). Uçtan uca: `web/e2e` (25 senaryo; Chromium'u DevTools protokolüyle sürer; açılış sahnesi, sorgu, matris, dosya, karşılaştırma, odak modu, harita, güven, kör test, telefon düzeni). CI (`.github/workflows/ci.yml`) Python 3.11 testlerini, arayüz testlerini ve Docker imaj derlemesini çalıştırır; uçtan uca senaryolar gerçek ATT&CK verisi gerektirdiği için yerelde koşulur.
+**Kabul.** Python: `pytest` (164 test; motor, API, sözleşme, bütünlük). Arayüz: `vitest` (41 birim testi). Uçtan uca: `web/e2e` (33 senaryo; Chromium'u DevTools protokolüyle sürer; açılış sahnesi, sorgu, matris, dosya, karşılaştırma, odak modu, harita, güven, kör test, telefon düzeni). CI (`.github/workflows/ci.yml`) Python 3.11 testlerini, arayüz testlerini ve Docker imaj derlemesini çalıştırır; uçtan uca senaryolar gerçek ATT&CK verisi gerektirdiği için yerelde koşulur.
 
 ---
 

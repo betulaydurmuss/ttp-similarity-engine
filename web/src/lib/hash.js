@@ -9,13 +9,17 @@ function list(value) {
     .slice(0, MAX_ITEMS);
 }
 
+function ids(value) {
+  return [...new Set(list(value).map((t) => t.toUpperCase()))];
+}
+
 export function readHash(hash) {
   const params = new URLSearchParams(String(hash ?? '').replace(/^#/, ''));
   const actor = params.get('a');
   const mode = params.get('m');
   return {
-    techniques: list(params.get('q')).map((t) => t.toUpperCase()),
-    noise: list(params.get('n')).map((t) => t.toUpperCase()),
+    techniques: ids(params.get('q')),
+    noise: ids(params.get('n')),
     actor: actor && SAFE.test(actor) ? actor : null,
     mode: ['observe', 'explore', 'trust'].includes(mode) ? mode : null
   };

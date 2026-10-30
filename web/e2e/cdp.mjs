@@ -75,7 +75,8 @@ export async function launch() {
       return res.result.value;
     },
     async key(key, code = key) {
-      await page('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: key === 'Enter' ? 13 : key === 'Escape' ? 27 : 0 });
+      const text = key === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {};
+      await page('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: key === 'Enter' ? 13 : key === 'Escape' ? 27 : 0, ...text });
       await page('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
     },
     async type(text) {

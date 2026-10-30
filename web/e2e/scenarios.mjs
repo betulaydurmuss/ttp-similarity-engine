@@ -107,6 +107,23 @@ await check('M matrisi açar; hücre seçimi sorguyu değiştirir; Esc kapatır'
   await waitFor(`!document.querySelector('.matrix')`);
   return `${columns} taktik sütunu`;
 });
+await check('matris açıkken değişen sonuç, matris kapanınca haritada yeniden çizilir', async () => {
+  await waitFor(`document.querySelectorAll('.beams line').length > 0`);
+  await click('.tools .btn', 'Matristen seç');
+  await waitFor(`document.querySelector('.matrix')`);
+  await click('.matrix .cell', 'T1190');
+  await waitFor(`document.querySelectorAll('.tray li').length === 10`);
+  await b.sleep(900);
+  await q(`document.querySelector('.beams').dataset.stale = '1', true`);
+  await b.key('Escape');
+  await waitFor(`!document.querySelector('.matrix')`);
+  await waitFor(`document.querySelector('.beams') && !document.querySelector('.beams').dataset.stale`);
+  const labels = await q(`[...document.querySelectorAll('.candidate-label')].map(t => t.textContent.trim()).sort().join(', ')`);
+  await q(`[...document.querySelectorAll('.tray li')].find(li => li.textContent.includes('T1190')).querySelector('button').click(), true`);
+  await waitFor(`document.querySelectorAll('.tray li').length === 9`);
+  await waitFor(`[...document.querySelectorAll('.list li')].some(li => li.textContent.includes('HEXANE'))`);
+  return labels;
+});
 await check('aday satırı aktör dosyasını açar', async () => {
   await click('.list li button', 'HEXANE');
   await waitFor(`document.querySelector('.drawer h2')`);
@@ -169,6 +186,70 @@ await check('gürültü enjeksiyonu kesikli tepsiye ekler', async () => {
   await click('.tools .btn', 'Gürültü enjekte');
   await waitFor(`document.querySelectorAll('.tray li.injected').length > 0`);
   return `${before} → ${await q(`document.querySelectorAll('.tray li').length`)}`;
+});
+await check('gürültü enjeksiyonu tekrar basınca birikmez', async () => {
+  const first = await q(`document.querySelectorAll('.tray li.injected').length`);
+  await click('.tools .btn', 'Gürültü enjekte');
+  await b.sleep(600);
+  const second = await q(`document.querySelectorAll('.tray li.injected').length`);
+  if (second !== first) throw new Error(`${first} → ${second}`);
+  return `${first} → ${second}`;
+});
+await check('kör testte enjekte gürültü gizli aktörü dışlar', async () => {
+  await q(`(() => { window.__noise = []; const real = window.fetch; window.fetch = (url, init) => { if (String(url).includes('/api/noise')) window.__noise.push(JSON.parse(init.body)); return real(url, init); }; return true; })()`);
+  await click('.tools .btn', 'Gürültü enjekte');
+  await waitFor(`window.__noise.length > 0`);
+  const sent = await q(`window.__noise.at(-1).exclude_actor`);
+  const answer = await q(`document.querySelector('.reveal strong .mono').textContent.trim()`);
+  if (sent !== answer) throw new Error(`gönderilen ${sent}, gizli aktör ${answer}`);
+  return `exclude_actor=${sent}`;
+});
+await check('matriste gürültü kesikli görünür, tıklanınca gözleme döner', async () => {
+  await waitFor(`document.querySelectorAll('.tray li.injected').length > 0`);
+  await click('.tools .btn', 'Matristen seç');
+  await waitFor(`document.querySelectorAll('.matrix .cell.noise').length > 0`);
+  if (!(await q(`document.querySelector('.matrix .picked').textContent.includes('gürültü')`))) throw new Error('sayaçta gürültü yok');
+  const id = await q(`document.querySelector('.matrix .cell.noise .mono').textContent.trim()`);
+  await q(`document.querySelector('.matrix .cell.noise').click(), true`);
+  await waitFor(`[...document.querySelectorAll('.matrix .cell.on')].some(c => c.textContent.includes('${id}'))`);
+  await waitFor(`[...document.querySelectorAll('.tray li')].some(li => li.textContent.includes('${id}') && !li.classList.contains('injected'))`);
+  return `${id} gözleme döndü`;
+});
+await check('matristeki anlık sonuç şeridi 1. adayı gösterir', async () => {
+  await waitFor(`!document.querySelector('[aria-busy="true"]') && document.querySelector('.live .leader.first')`);
+  await b.sleep(600);
+  const live = await q(`document.querySelector('.live .leader.first').textContent.replace(/\\s+/g, ' ').trim()`);
+  const headline = await q(`document.querySelector('.headline h3').textContent.trim()`);
+  if (!live.includes(headline)) throw new Error(`şerit "${live}", panel "${headline}"`);
+  await b.key('Escape');
+  await waitFor(`!document.querySelector('.matrix')`);
+  return live;
+});
+await check('kör sorgu değiştirilince cevap orijinal sıralamayla değerlendirilir', async () => {
+  await click('.tools .btn', 'Kör test');
+  await waitFor(`document.querySelector('.blind button') && document.querySelector('.headline')`);
+  await b.sleep(600);
+  await click('.tools .btn', 'Matristen seç');
+  await waitFor(`document.querySelector('.matrix')`);
+  await q(`document.querySelector('.matrix .cell:not(.on):not(.noise)').click(), true`);
+  await b.key('Escape');
+  await waitFor(`document.querySelector('.blind p')?.textContent.includes('değiştirdin')`);
+  await click('.blind button', 'Cevabı göster');
+  await waitFor(`document.querySelector('.reveal p')?.textContent.includes('Orijinal kör sorguda')`);
+  return await q(`document.querySelector('.reveal p').textContent.replace(/\\s+/g, ' ').trim()`);
+});
+await check('logo giriş ekranına döner ve adresi temizler', async () => {
+  await click('a.lockup');
+  await waitFor(`document.querySelector('.arrival')`);
+  const href = await q(`location.href`);
+  if (href !== new URL('/', BASE).href) throw new Error(href);
+  return href;
+});
+await check('giriş ekranında odaktaki düğmeye Enter o düğmeyi çalıştırır', async () => {
+  await q(`[...document.querySelectorAll('.arrival .cta button')].find(e => e.textContent.includes('Haritayı gez')).focus(), true`);
+  await b.key('Enter');
+  await waitFor(`!document.querySelector('.arrival') && location.hash === '#m=explore'`);
+  return await q(`location.hash`);
 });
 await check('masaüstünde konsol hatası yok', async () => {
   if (b.errors.length) throw new Error(b.errors.join(' | '));

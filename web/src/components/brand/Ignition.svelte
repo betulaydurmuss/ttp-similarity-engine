@@ -96,8 +96,8 @@
       <defs>
         <radialGradient id="ig-spark">
           <stop offset="0%" stop-color="#ffffff" />
-          <stop offset="35%" stop-color="#ffe2b0" />
-          <stop offset="100%" stop-color="#ffb54a" stop-opacity="0" />
+          <stop offset="35%" stop-color="#f4f7fb" />
+          <stop offset="100%" stop-color="#e9eef5" stop-opacity="0" />
         </radialGradient>
         <radialGradient id="ig-fire" cx="50%" cy="60%" r="60%">
           <stop offset="0%" stop-color="#ffd08a" />
@@ -105,9 +105,9 @@
           <stop offset="100%" stop-color="#ff4d2e" />
         </radialGradient>
         <linearGradient id="ig-flare" x1="0" x2="1">
-          <stop offset="0%" stop-color="#ffb54a" stop-opacity="0" />
-          <stop offset="50%" stop-color="#fff3dc" />
-          <stop offset="100%" stop-color="#ffb54a" stop-opacity="0" />
+          <stop offset="0%" stop-color="#e9eef5" stop-opacity="0" />
+          <stop offset="50%" stop-color="#ffffff" />
+          <stop offset="100%" stop-color="#e9eef5" stop-opacity="0" />
         </linearGradient>
         <linearGradient id="ig-sheen" x1="0" x2="1" y1="0" y2="0.35">
           <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
@@ -175,7 +175,8 @@
     </svg>
 
     <p class="tagline mono" onanimationend={(event) => event.animationName.includes('rise') && (revealed = true)}>
-      CTI · TTP BENZERLİK İSTASYONU
+      <span class="discipline">SİBER TEHDİT İSTİHBARATI</span>
+      <span>TTP BENZERLİK İSTASYONU</span>
     </p>
     <p class="waiting mono" aria-live="polite">{revealed && !ready ? 'istasyon bağlanıyor…' : ''}</p>
   </div>
@@ -273,7 +274,7 @@
   }
 
   .final-star {
-    fill: var(--signal);
+    fill: currentColor;
     opacity: 0;
   }
 
@@ -356,7 +357,7 @@
   }
 
   .star {
-    fill: var(--signal);
+    fill: var(--ink);
   }
 
   .embers circle {
@@ -366,10 +367,19 @@
   }
 
   .tagline {
+    display: grid;
+    justify-items: center;
+    gap: 0.75em;
     margin: calc(var(--mark) * 0.08) 0 0;
+    padding-left: 0.34em;
     font-size: clamp(10.5px, 1.7vmin, 13px);
     letter-spacing: 0.34em;
+    text-align: center;
     color: var(--ink-3);
+  }
+
+  .discipline {
+    color: var(--ink-2);
   }
 
   .waiting {
@@ -586,10 +596,10 @@
 
   @keyframes glow {
     from {
-      filter: drop-shadow(0 0 0.6px #ffb54a);
+      filter: drop-shadow(0 0 0.6px rgba(233, 238, 245, 0.6));
     }
     to {
-      filter: drop-shadow(0 0 3px #ff9a4a);
+      filter: drop-shadow(0 0 3px rgba(233, 238, 245, 0.9));
     }
   }
 

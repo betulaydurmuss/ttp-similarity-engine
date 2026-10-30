@@ -15,6 +15,21 @@
   const blindRank = $derived(
     station.blind && result ? (result.candidates.find((c) => c.id === station.blind.answer.id)?.rank ?? null) : null
   );
+  const judgedRank = $derived(station.blindModified ? station.blind?.originalRank : blindRank);
+
+  function ordinal(rank) {
+    return rank === 1 ? 'birinci' : `${rank}.`;
+  }
+
+  function originalVerdict(rank) {
+    if (rank === undefined) return 'Orijinal kör sorgunun sonucu ölçülemedi.';
+    if (rank === null) return 'Orijinal kör sorguda istasyon onu bulamadı.';
+    return `Orijinal kör sorguda istasyon onu ${ordinal(rank)} sırada buldu.`;
+  }
+
+  function currentVerdict(rank) {
+    return rank ? `Değiştirdiğin sorguda ${ordinal(rank)} sırada.` : 'Değiştirdiğin sorguda aday listesinde yok.';
+  }
 
   async function copy(text, message) {
     try {
@@ -61,16 +76,22 @@
     {#if station.blind}
       <div class="blind" class:revealed={station.blind.revealed}>
         {#if !station.blind.revealed}
-          <p>Gizli aktör listede mi? Sıralamaya bak, sonra cevabı aç.</p>
+          {#if station.blindModified}
+            <p>Kör sorguyu değiştirdin. Cevap, istasyonun <b>orijinal kör sorgudaki</b> sıralamasıyla değerlendirilecek.</p>
+          {:else}
+            <p>Gizli aktör listede mi? Sıralamaya bak, sonra cevabı aç.</p>
+          {/if}
           <button class="btn" onclick={() => station.revealBlind()}>Cevabı göster</button>
         {:else}
           <div class="reveal" in:scale={{ start: 0.92, duration: 520 * motion, easing: backOut }}>
-            <span class="ring" class:hit={blindRank === 1} aria-hidden="true"></span>
+            <span class="ring" class:hit={judgedRank === 1} aria-hidden="true"></span>
             <div>
               <span class="eyebrow">gizli aktör</span>
               <strong>{station.blind.answer.name} <span class="mono">{station.blind.answer.id}</span></strong>
               <p>
-                {#if blindRank === 1}
+                {#if station.blindModified}
+                  {originalVerdict(station.blind.originalRank)} {currentVerdict(blindRank)}
+                {:else if blindRank === 1}
                   İstasyon onu birinci sırada buldu.
                 {:else if blindRank}
                   İstasyon onu {blindRank}. sırada buldu.

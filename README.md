@@ -9,7 +9,7 @@
 
 <p align="center">
   Olayda gözlenen MITRE ATT&CK tekniklerini bilinen tehdit aktörleriyle <b>davranışsal benzerlik</b> üzerinden karşılaştıran,<br>
-  sonucu kanıtıyla ve ölçülmüş güveniyle gösteren bir CTI analiz istasyonu.
+  sonucu kanıtıyla ve ölçülmüş güveniyle gösteren bir siber tehdit istihbaratı (CTI) analiz istasyonu.
 </p>
 
 > **Bu araç attribution (faillik atfı) yapmaz.** Yalnızca davranışsal benzerlik ölçer. Bir sorgunun bir aktöre benzemesi, o aktörün sorumlu olduğu anlamına gelmez; yalnızca raporlanmış ATT&CK tekniklerinin örtüştüğünü gösterir. Sonuçlar açık kaynak raporlamanın kapsam ve yanlılığından doğrudan etkilenir.
@@ -123,6 +123,7 @@ cd web && npm run dev                  # arayüz: http://localhost:5173 (API'ye 
 <p align="center">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="docs/screens/yildiz-atesleme.webp">
+    <source srcset="docs/screens/yildiz-atesleme-anim.webp" type="image/webp">
     <img src="docs/screens/yildiz-atesleme.gif" alt="YILDIZ açılış sahnesi" width="480">
   </picture>
 </p>
@@ -267,9 +268,9 @@ Bayraklar: `--scheme smooth_idf|plain_idf|binary` · `--metric cosine|jaccard` �
 ## Testler ve CI
 
 ```bash
-pytest                         # 155 test: motor, API, sözleşme, bütünlük, sürüm sabitleme
-cd web && npm test             # 39 birim testi: ayrıştırma, arama, URL durumu, geometri, uçuş, dışa aktarma
-cd web && npm run e2e          # 25 uçtan uca senaryo (istasyon çalışırken, gerçek ATT&CK verisiyle)
+pytest                         # 164 test: motor, API, sözleşme, bütünlük, sürüm sabitleme
+cd web && npm test             # 41 birim testi: ayrıştırma, arama, URL durumu, geometri, uçuş, dışa aktarma
+cd web && npm run e2e          # 33 uçtan uca senaryo (istasyon çalışırken, gerçek ATT&CK verisiyle)
 ```
 
 Uçtan uca senaryolar Chromium tabanlı bir tarayıcıyı (Edge / Chrome / Chromium ya da `CHROME_PATH`) DevTools protokolüyle sürer. Kapsananlar:

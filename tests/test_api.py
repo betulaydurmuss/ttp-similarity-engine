@@ -100,6 +100,7 @@ def test_confidence_is_identical_whatever_top_k(client):
         {"techniques": ["T1566"] * 401},
         {"techniques": ["T" * 41]},
         {"techniques": "x" * 16_001},
+        {"techniques": " ".join(f"X{i}" for i in range(401))},
         {"techniques": ["T1566"], "top_k": 0},
         {"techniques": ["T1566"], "top_k": 51},
         {"top_k": 5},
@@ -107,6 +108,22 @@ def test_confidence_is_identical_whatever_top_k(client):
 )
 def test_query_input_is_bounded(client, payload):
     assert client.post("/api/query", json=payload).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/query", '{"techniques": ["T1566"], "top_k": 1e400}'),
+        ("/api/query", '{"techniques": ["T1566"], "top_k": NaN}'),
+        ("/api/noise", '{"techniques": ["T1566"], "ratio": Infinity}'),
+        ("/api/blind", '{"fraction": -Infinity}'),
+    ],
+)
+def test_non_finite_numbers_are_rejected_without_echoing_input(client, path, body):
+    response = client.post(path, content=body, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert all("input" not in error for error in response.json()["detail"])
 
 
 def test_dossier(client, station):
@@ -152,6 +169,21 @@ def test_noise_never_repeats_the_query_and_is_reproducible(client):
     assert first == second
     assert len(first) == 3
     assert not set(first) & set(QUERY)
+
+
+def test_noise_can_exclude_the_hidden_actor(client, station):
+    blind = client.post("/api/blind", json={"fraction": 0.5, "seed": 5}).json()
+    actor = station.by_id[blind["answer"]["id"]]
+    for seed in range(20):
+        payload = {"techniques": blind["techniques"], "ratio": 1.0, "seed": seed, "exclude_actor": actor.actor_id.lower()}
+        noise = client.post("/api/noise", json=payload).json()["noise"]
+        assert noise
+        assert not set(noise) & set(actor.technique_ids)
+
+
+def test_noise_rejects_an_unknown_actor_to_exclude(client):
+    payload = {"techniques": QUERY, "exclude_actor": "G9999"}
+    assert client.post("/api/noise", json=payload).status_code == 404
 
 
 def test_blind_case_draws_from_the_answer_actor(client, station):
